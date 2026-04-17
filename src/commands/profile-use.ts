@@ -1,6 +1,7 @@
 import { loadConfig } from "../config/load-config.js";
 import { saveConfig } from "../config/save-config.js";
 import { CliError } from "../errors/cli-error.js";
+import { writeStdout } from "../utils/io.js";
 
 export async function runProfileUse(args: string[]): Promise<void> {
   const name = args[0];
@@ -15,5 +16,5 @@ export async function runProfileUse(args: string[]): Promise<void> {
 
   config.defaultProfile = name;
   await saveConfig(config);
-  process.stdout.write(`Default profile set to ${name}.\n`);
+  await writeStdout(`Default profile set to ${name}.\n`);
 }

@@ -2,6 +2,7 @@ import { loadConfig } from "../config/load-config.js";
 import { saveConfig } from "../config/save-config.js";
 import { deleteAccessToken } from "../credentials/store.js";
 import { CliError } from "../errors/cli-error.js";
+import { writeStdout } from "../utils/io.js";
 
 export async function runProfileRemove(args: string[]): Promise<void> {
   const name = args[0];
@@ -21,5 +22,5 @@ export async function runProfileRemove(args: string[]): Promise<void> {
   delete config.profiles[name];
   await saveConfig(config);
   await deleteAccessToken(credentialStore);
-  process.stdout.write(`Removed profile ${name}.\n`);
+  await writeStdout(`Removed profile ${name}.\n`);
 }

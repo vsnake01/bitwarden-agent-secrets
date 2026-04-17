@@ -8,6 +8,7 @@ import {
 import { CliError } from "../errors/cli-error.js";
 import type { CredentialStoreType } from "../schemas/config-schema.js";
 import { readFlagValue, readTokenFromArgsOrEnv } from "../utils/args.js";
+import { writeStdout } from "../utils/io.js";
 
 export async function runProfileRotateToken(args: string[]): Promise<void> {
   const name = args[0];
@@ -58,5 +59,5 @@ export async function runProfileRotateToken(args: string[]): Promise<void> {
     await deleteAccessToken(previousStore);
   }
 
-  process.stdout.write(`Rotated token for profile ${name} using ${targetStore.type}.\n`);
+  await writeStdout(`Rotated token for profile ${name} using ${targetStore.type}.\n`);
 }

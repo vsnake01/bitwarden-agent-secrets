@@ -16,13 +16,14 @@ import { runProfileRotateToken } from "./commands/profile-rotate-token.js";
 import { runProfileUse } from "./commands/profile-use.js";
 import { runReveal } from "./commands/reveal.js";
 import { CliError, formatError } from "./errors/cli-error.js";
+import { writeStderr, writeStdout } from "./utils/io.js";
 
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
   const [command, subcommand] = args;
 
   if (!command || command === "--help" || command === "-h") {
-    printHelp();
+    await printHelp();
     return;
   }
 
@@ -60,7 +61,7 @@ async function main(): Promise<void> {
     }
   } catch (error) {
     const cliError = formatError(error);
-    process.stderr.write(`${cliError.message}\n`);
+    await writeStderr(`${cliError.message}\n`);
     process.exitCode = cliError.exitCode;
   }
 }
@@ -112,7 +113,7 @@ async function runPolicyCommand(
   }
 }
 
-function printHelp(): void {
+async function printHelp(): Promise<void> {
   const lines = [
     "bitwarden-agent-secrets",
     "",
@@ -134,7 +135,7 @@ function printHelp(): void {
     "  bitwarden-agent-secrets policy validate",
   ];
 
-  process.stdout.write(`${lines.join("\n")}\n`);
+  await writeStdout(`${lines.join("\n")}\n`);
 }
 
 void main();

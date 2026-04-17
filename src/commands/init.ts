@@ -13,6 +13,7 @@ import { CliError } from "../errors/cli-error.js";
 import type { ConfigFile, CredentialStoreType } from "../schemas/config-schema.js";
 import { chmodSafe } from "../security/permissions.js";
 import { readFlagValue, readTokenFromArgsOrEnv } from "../utils/args.js";
+import { writeStdout } from "../utils/io.js";
 
 const CLOUD_API_URL = "https://api.bitwarden.com";
 const CLOUD_IDENTITY_URL = "https://identity.bitwarden.com";
@@ -54,7 +55,7 @@ export async function runInit(args: string[]): Promise<void> {
 
   await saveConfig(config);
   await ensurePolicyTemplate();
-  process.stdout.write(
+  await writeStdout(
     `Initialized profile ${profileName} using credential store ${credentialStore.type}.\n`,
   );
 }

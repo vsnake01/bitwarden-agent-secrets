@@ -1,4 +1,5 @@
 import { loadConfig } from "../config/load-config.js";
+import { writeStdout } from "../utils/io.js";
 
 export async function runProfileList(_args: string[]): Promise<void> {
   const config = await loadConfig();
@@ -7,5 +8,5 @@ export async function runProfileList(_args: string[]): Promise<void> {
       ? `* ${name} (${config.profiles[name].credentialStore.type})`
       : `  ${name} (${config.profiles[name].credentialStore.type})`,
   );
-  process.stdout.write(`${lines.join("\n")}\n`);
+  await writeStdout(`${lines.join("\n")}\n`);
 }

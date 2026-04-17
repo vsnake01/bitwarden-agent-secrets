@@ -2,6 +2,7 @@ import { loadPolicy } from "../config/load-policy.js";
 import { savePolicy } from "../config/save-policy.js";
 import { CliError } from "../errors/cli-error.js";
 import type { SecretMode } from "../schemas/policy-schema.js";
+import { writeStdout } from "../utils/io.js";
 
 export async function runPolicyAdd(args: string[]): Promise<void> {
   const alias = args[0];
@@ -36,7 +37,7 @@ export async function runPolicyAdd(args: string[]): Promise<void> {
     requiresApproval: args.includes("--requires-approval"),
   };
   await savePolicy(policy);
-  process.stdout.write(`Added policy alias ${alias}.\n`);
+  await writeStdout(`Added policy alias ${alias}.\n`);
 }
 
 function readFlagValue(args: string[], flagName: string): string | undefined {

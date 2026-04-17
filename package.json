@@ -18,7 +18,8 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "check": "tsc --noEmit -p tsconfig.json",
-    "dev": "node --enable-source-maps --loader ts-node/esm src/cli.ts"
+    "dev": "node --enable-source-maps --loader ts-node/esm src/cli.ts",
+    "test": "npm run build && node --test test/*.test.js"
   },
   "devDependencies": {
     "@types/node": "^24.5.0",

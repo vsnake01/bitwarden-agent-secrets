@@ -1,6 +1,7 @@
 import { loadPolicy } from "../config/load-policy.js";
 import { savePolicy } from "../config/save-policy.js";
 import { CliError } from "../errors/cli-error.js";
+import { writeStdout } from "../utils/io.js";
 
 export async function runPolicyRemove(args: string[]): Promise<void> {
   const alias = args[0];
@@ -15,5 +16,5 @@ export async function runPolicyRemove(args: string[]): Promise<void> {
 
   delete policy.secrets[alias];
   await savePolicy(policy);
-  process.stdout.write(`Removed policy alias ${alias}.\n`);
+  await writeStdout(`Removed policy alias ${alias}.\n`);
 }

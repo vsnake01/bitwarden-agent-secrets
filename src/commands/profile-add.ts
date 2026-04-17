@@ -8,6 +8,7 @@ import {
 import { CliError } from "../errors/cli-error.js";
 import type { CredentialStoreType } from "../schemas/config-schema.js";
 import { readFlagValue, readTokenFromArgsOrEnv } from "../utils/args.js";
+import { writeStdout } from "../utils/io.js";
 
 export async function runProfileAdd(args: string[]): Promise<void> {
   const name = args[0];
@@ -38,5 +39,5 @@ export async function runProfileAdd(args: string[]): Promise<void> {
     credentialStore,
   };
   await saveConfig(config);
-  process.stdout.write(`Added profile ${name} using credential store ${credentialStore.type}.\n`);
+  await writeStdout(`Added profile ${name} using credential store ${credentialStore.type}.\n`);
 }

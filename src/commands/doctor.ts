@@ -7,6 +7,7 @@ import { getAuditLogPath, getConfigPath, getPolicyPath } from "../config/paths.j
 import { resolveProfileCredentials } from "../runtime/resolve-profile-credentials.js";
 import { resolveProfile } from "../runtime/resolve-profile.js";
 import { readFlagValue } from "../utils/args.js";
+import { writeStdout } from "../utils/io.js";
 
 export async function runDoctor(args: string[]): Promise<void> {
   const config = await loadConfig();
@@ -20,8 +21,8 @@ export async function runDoctor(args: string[]): Promise<void> {
   await stat(getAuditLogPath()).catch(() => undefined);
   await client.ping();
 
-  process.stdout.write("Doctor checks passed.\n");
-  process.stdout.write(`Profile: ${profileName}\n`);
-  process.stdout.write(`Credential store: ${profile.credentialStore.type}\n`);
-  process.stdout.write(`Configured aliases: ${Object.keys(policy.secrets).length}\n`);
+  await writeStdout("Doctor checks passed.\n");
+  await writeStdout(`Profile: ${profileName}\n`);
+  await writeStdout(`Credential store: ${profile.credentialStore.type}\n`);
+  await writeStdout(`Configured aliases: ${Object.keys(policy.secrets).length}\n`);
 }

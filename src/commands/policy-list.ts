@@ -1,11 +1,12 @@
 import { loadPolicy } from "../config/load-policy.js";
+import { writeStdout } from "../utils/io.js";
 
 export async function runPolicyList(_args: string[]): Promise<void> {
   const policy = await loadPolicy();
   const aliases = Object.entries(policy.secrets);
 
   if (aliases.length === 0) {
-    process.stdout.write("No policy aliases configured.\n");
+    await writeStdout("No policy aliases configured.\n");
     return;
   }
 
@@ -13,5 +14,5 @@ export async function runPolicyList(_args: string[]): Promise<void> {
     const profiles = secret.profiles.join(",");
     return `${alias}  mode=${secret.mode} env=${secret.envName} profiles=${profiles} secretId=${secret.secretId}`;
   });
-  process.stdout.write(`${lines.join("\n")}\n`);
+  await writeStdout(`${lines.join("\n")}\n`);
 }
