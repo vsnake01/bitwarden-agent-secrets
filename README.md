@@ -90,6 +90,7 @@ Default paths:
 - credential file fallback dir: `~/.config/bitwarden-agent-secrets/credentials/`
 - policy file: `~/.config/bitwarden-agent-secrets/policy.json`
 - audit log: `~/.config/bitwarden-agent-secrets/audit.log`
+- Bitwarden SDK state dir: `~/.local/state/bitwarden-agent-secrets/bitwarden/`
 - runtime temp root: `~/.local/state/bitwarden-agent-secrets/tmp/`
 
 Permissions:
@@ -145,6 +146,8 @@ Supported credential backends:
 - macOS: system Keychain via `security`
 - Linux: Secret Service / GNOME Keyring via `secret-tool`
 - fallback: local file backend with `0600` permissions
+
+At runtime, the tool uses the official Bitwarden Secrets Manager Node SDK and keeps per-profile SDK state files under `~/.local/state/bitwarden-agent-secrets/bitwarden/`.
 
 ### `policy.json`
 
@@ -264,6 +267,7 @@ Checks include:
 - config presence
 - file permissions
 - profile validity
+- credential backend readability
 - Bitwarden connectivity
 - policy validity
 - secret accessibility for configured aliases

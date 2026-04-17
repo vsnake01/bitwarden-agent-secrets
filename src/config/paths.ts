@@ -13,6 +13,14 @@ export function getRuntimeTempRoot(): string {
   return path.join(getStateDir(), "tmp");
 }
 
+export function getBitwardenStateDir(): string {
+  return path.join(getStateDir(), "bitwarden");
+}
+
+export function getBitwardenStatePath(profileName: string): string {
+  return path.join(getBitwardenStateDir(), `${profileName}.json`);
+}
+
 export function getCredentialDir(): string {
   return path.join(getConfigDir(), "credentials");
 }

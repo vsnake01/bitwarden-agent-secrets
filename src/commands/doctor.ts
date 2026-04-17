@@ -14,7 +14,7 @@ export async function runDoctor(args: string[]): Promise<void> {
   const policy = await loadPolicy();
   const { profileName, profile } = resolveProfile(config, readFlagValue(args, "--profile"));
   const resolvedProfile = await resolveProfileCredentials(profile);
-  const client = new BitwardenClient(resolvedProfile);
+  const client = new BitwardenClient(profileName, resolvedProfile);
 
   await stat(getConfigPath());
   await stat(getPolicyPath()).catch(() => undefined);

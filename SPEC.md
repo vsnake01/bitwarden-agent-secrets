@@ -80,6 +80,7 @@ Files:
 - credential file fallback dir under `~/.config/bitwarden-agent-secrets/credentials/`
 - `policy.json`
 - `audit.log`
+- Bitwarden SDK state files under `~/.local/state/bitwarden-agent-secrets/bitwarden/`
 - runtime temp files under `~/.local/state/bitwarden-agent-secrets/tmp/`
 
 Permissions:
@@ -137,6 +138,7 @@ Credential storage model:
 - `file` is an explicit fallback backend
 - file backend stores the token in `~/.config/bitwarden-agent-secrets/credentials/<profile>.token`
 - file backend paths must be protected with `0600`
+- Bitwarden Secrets Manager operations use the official Node SDK with per-profile state files under `~/.local/state/bitwarden-agent-secrets/bitwarden/`
 
 ## Policy Specification
 

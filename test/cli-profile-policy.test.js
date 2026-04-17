@@ -1,7 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { access, readFile } from "node:fs/promises";
+import { access, readFile, readdir } from "node:fs/promises";
 
+import {
+  resetBitwardenSdkLoaderForTests,
+  setBitwardenSdkLoaderForTests,
+} from "../dist/bitwarden/client.js";
 import { runDoctor } from "../dist/commands/doctor.js";
 import { runExec } from "../dist/commands/exec.js";
 import { runFile } from "../dist/commands/file.js";
@@ -24,6 +28,45 @@ import {
   readJson,
   withPatchedEnv,
 } from "./helpers.js";
+
+function installFakeBitwardenSdk() {
+  const calls = {
+    constructions: [],
+    logins: [],
+    gets: [],
+  };
+
+  class FakeSdkClient {
+    constructor(settings, logLevel) {
+      calls.constructions.push({ settings, logLevel });
+    }
+
+    auth() {
+      return {
+        loginAccessToken: async (accessToken, stateFile) => {
+          calls.logins.push({ accessToken, stateFile });
+        },
+      };
+    }
+
+    secrets() {
+      return {
+        get: async (id) => {
+          calls.gets.push(id);
+          return { value: `secret:${id}` };
+        },
+      };
+    }
+  }
+
+  setBitwardenSdkLoaderForTests(async () => ({
+    BitwardenClient: FakeSdkClient,
+    DeviceType: { SDK: "SDK" },
+    LogLevel: { Error: 4 },
+  }));
+
+  return calls;
+}
 
 test(
   "init with file backend creates config, policy, and credential file",
@@ -168,6 +211,7 @@ test(
   { concurrency: false },
   async () => {
     const homePath = await makeTempHome();
+    const calls = installFakeBitwardenSdk();
 
     try {
       await withPatchedEnv(
@@ -200,6 +244,9 @@ test(
       );
       assert.match(doctorOutput, /Credential store: file/);
       assert.match(doctorOutput, /Configured aliases: 1/);
+      assert.equal(calls.logins.length, 1);
+      assert.equal(calls.logins[0].accessToken, "token-1");
+      assert.match(calls.logins[0].stateFile, /bitwarden\/default\.json$/);
 
       const validateOutput = await withPatchedEnv({ HOME: homePath }, () =>
         captureStdout(() => runPolicyValidate([])),
@@ -213,6 +260,7 @@ test(
       );
       assert.deepEqual(policy.secrets, {});
     } finally {
+      resetBitwardenSdkLoaderForTests();
       await cleanupTempHome(homePath);
     }
   },
@@ -239,6 +287,86 @@ test(
         /Missing child command/,
       );
     } finally {
+      await cleanupTempHome(homePath);
+    }
+  },
+);
+
+test(
+  "exec injects env secrets and file injects temporary secret files with mocked Bitwarden SDK",
+  { concurrency: false },
+  async () => {
+    const homePath = await makeTempHome();
+    const calls = installFakeBitwardenSdk();
+
+    try {
+      await withPatchedEnv(
+        { HOME: homePath, BWS_ACCESS_TOKEN: "token-1" },
+        () => runInit(["--credential-store", "file", "--profile", "default"]),
+      );
+
+      await withPatchedEnv({ HOME: homePath }, () =>
+        runPolicyAdd([
+          "api_token",
+          "--secret-id",
+          "secret-123",
+          "--mode",
+          "env",
+          "--env",
+          "API_TOKEN",
+          "--profile",
+          "default",
+        ]),
+      );
+
+      await withPatchedEnv({ HOME: homePath }, () =>
+        runPolicyAdd([
+          "ssh_key",
+          "--secret-id",
+          "secret-file",
+          "--mode",
+          "file",
+          "--env",
+          "SSH_KEY_FILE",
+          "--profile",
+          "default",
+        ]),
+      );
+
+      process.exitCode = undefined;
+      await withPatchedEnv({ HOME: homePath }, () =>
+        runExec([
+          "--map",
+          "api_token:API_TOKEN",
+          "--",
+          "sh",
+          "-c",
+          'test "$API_TOKEN" = "secret:secret-123"',
+        ]),
+      );
+      assert.equal(process.exitCode, 0);
+
+      process.exitCode = undefined;
+      await withPatchedEnv({ HOME: homePath }, () =>
+        runFile([
+          "--mount",
+          "ssh_key:SSH_KEY_FILE",
+          "--",
+          "sh",
+          "-c",
+          'test -f "$SSH_KEY_FILE" && grep -q "secret:secret-file" "$SSH_KEY_FILE"',
+        ]),
+      );
+      assert.equal(process.exitCode, 0);
+
+      const runtimeEntries = await readdir(
+        pathInHome(homePath, ".local", "state", "bitwarden-agent-secrets", "tmp"),
+      );
+      assert.deepEqual(runtimeEntries, []);
+      assert.deepEqual(calls.gets, ["secret-123", "secret-file"]);
+    } finally {
+      resetBitwardenSdkLoaderForTests();
+      process.exitCode = undefined;
       await cleanupTempHome(homePath);
     }
   },

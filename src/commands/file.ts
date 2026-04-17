@@ -15,7 +15,7 @@ export async function runFile(args: string[]): Promise<void> {
   const policy = await loadPolicy();
   const { profileName, profile } = resolveProfile(config, parsed.profileName);
   const resolvedProfile = await resolveProfileCredentials(profile);
-  const client = new BitwardenClient(resolvedProfile);
+  const client = new BitwardenClient(profileName, resolvedProfile);
   const env: Record<string, string> = {};
   const cleanups: Array<() => Promise<void>> = [];
 

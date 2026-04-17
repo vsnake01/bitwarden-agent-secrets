@@ -14,7 +14,7 @@ export async function runExec(args: string[]): Promise<void> {
   const policy = await loadPolicy();
   const { profileName, profile } = resolveProfile(config, parsed.profileName);
   const resolvedProfile = await resolveProfileCredentials(profile);
-  const client = new BitwardenClient(resolvedProfile);
+  const client = new BitwardenClient(profileName, resolvedProfile);
   const env: Record<string, string> = {};
 
   for (const mapping of parsed.mappings) {
