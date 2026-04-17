@@ -26,3 +26,22 @@ function validatePolicy(policy: PolicyFile): void {
     throw new CliError(2, "Policy is missing secrets.");
   }
 }
+
+export function assertValidPolicy(policy: PolicyFile): void {
+  validatePolicy(policy);
+
+  for (const [alias, secret] of Object.entries(policy.secrets)) {
+    if (!secret.secretId) {
+      throw new CliError(2, `Policy alias ${alias} is missing secretId.`);
+    }
+    if (secret.mode !== "env" && secret.mode !== "file") {
+      throw new CliError(2, `Policy alias ${alias} has invalid mode.`);
+    }
+    if (!secret.envName) {
+      throw new CliError(2, `Policy alias ${alias} is missing envName.`);
+    }
+    if (!Array.isArray(secret.profiles) || secret.profiles.length === 0) {
+      throw new CliError(2, `Policy alias ${alias} must define at least one profile.`);
+    }
+  }
+}

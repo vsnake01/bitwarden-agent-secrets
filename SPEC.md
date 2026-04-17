@@ -174,6 +174,13 @@ Policy rules:
 - list/search/discovery operations are not supported
 - alias usage must be rejected if profile is not allowed
 
+Allowlist model:
+
+- allowlist is defined locally in `policy.json`
+- allowlist is not auto-generated from all secrets visible to the Bitwarden token
+- secret values are fetched on demand only for requested aliases
+- `policy` commands may help edit `policy.json`, but they do not dump or cache all secrets
+
 ## CLI Contract
 
 ### `bitwarden-agent-secrets init`
@@ -272,6 +279,46 @@ Purpose:
 Rules:
 
 - must reject removing the active default profile unless changed first
+
+### `bitwarden-agent-secrets policy list`
+
+Purpose:
+
+- show configured aliases in the local allowlist
+
+### `bitwarden-agent-secrets policy add <alias> --secret-id <id> --mode <env|file> --env <ENV> --profile <name>`
+
+Purpose:
+
+- add or replace an alias in `policy.json`
+
+Rules:
+
+- alias names are local identifiers
+- `--secret-id` is required
+- `--mode` must be `env` or `file`
+- `--env` is required
+- at least one `--profile` is required
+- `--requires-approval` is optional
+
+### `bitwarden-agent-secrets policy remove <alias>`
+
+Purpose:
+
+- remove an alias from `policy.json`
+
+### `bitwarden-agent-secrets policy validate`
+
+Purpose:
+
+- validate schema and local consistency of `policy.json`
+
+Checks:
+
+- alias entries contain `secretId`
+- alias entries contain valid `mode`
+- alias entries contain `envName`
+- alias entries contain one or more `profiles`
 
 ### `bitwarden-agent-secrets exec --map <alias:ENV> -- <command...>`
 
@@ -437,6 +484,10 @@ bitwarden-agent-secrets/
       doctor.ts
       exec.ts
       file.ts
+      policy-add.ts
+      policy-list.ts
+      policy-remove.ts
+      policy-validate.ts
       reveal.ts
       profile-list.ts
       profile-add.ts

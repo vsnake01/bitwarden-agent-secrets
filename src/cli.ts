@@ -5,6 +5,10 @@ import { runDoctor } from "./commands/doctor.js";
 import { runExec } from "./commands/exec.js";
 import { runFile } from "./commands/file.js";
 import { runInit } from "./commands/init.js";
+import { runPolicyAdd } from "./commands/policy-add.js";
+import { runPolicyList } from "./commands/policy-list.js";
+import { runPolicyRemove } from "./commands/policy-remove.js";
+import { runPolicyValidate } from "./commands/policy-validate.js";
 import { runProfileAdd } from "./commands/profile-add.js";
 import { runProfileList } from "./commands/profile-list.js";
 import { runProfileRemove } from "./commands/profile-remove.js";
@@ -47,6 +51,9 @@ async function main(): Promise<void> {
       case "profile":
         await runProfileCommand(subcommand, args.slice(2));
         return;
+      case "policy":
+        await runPolicyCommand(subcommand, args.slice(2));
+        return;
       default:
         throw new CliError(64, `Unknown command: ${command}`);
     }
@@ -79,6 +86,28 @@ async function runProfileCommand(
   }
 }
 
+async function runPolicyCommand(
+  subcommand: string | undefined,
+  args: string[],
+): Promise<void> {
+  switch (subcommand) {
+    case "list":
+      await runPolicyList(args);
+      return;
+    case "add":
+      await runPolicyAdd(args);
+      return;
+    case "remove":
+      await runPolicyRemove(args);
+      return;
+    case "validate":
+      await runPolicyValidate(args);
+      return;
+    default:
+      throw new CliError(64, "Supported policy commands: list, add, remove, validate.");
+  }
+}
+
 function printHelp(): void {
   const lines = [
     "bitwarden-agent-secrets",
@@ -94,6 +123,10 @@ function printHelp(): void {
     "  bitwarden-agent-secrets profile add <name>",
     "  bitwarden-agent-secrets profile use <name>",
     "  bitwarden-agent-secrets profile remove <name>",
+    "  bitwarden-agent-secrets policy list",
+    "  bitwarden-agent-secrets policy add <alias> --secret-id <id> --mode <env|file> --env <ENV> --profile <name>",
+    "  bitwarden-agent-secrets policy remove <alias>",
+    "  bitwarden-agent-secrets policy validate",
   ];
 
   process.stdout.write(`${lines.join("\n")}\n`);

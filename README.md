@@ -168,6 +168,49 @@ Important rules:
 - `mode=env` is for runtime environment injection
 - `mode=file` is for temporary file injection
 
+### Policy Management
+
+In MVP, the allowlist lives in `policy.json`. You can either edit it directly or use CLI helpers.
+
+List configured aliases:
+
+```bash
+bitwarden-agent-secrets policy list
+```
+
+Add a new alias:
+
+```bash
+bitwarden-agent-secrets policy add github_token \
+  --secret-id 382580ab-1368-4e85-bfa3-b02e01400c9f \
+  --mode env \
+  --env GITHUB_TOKEN \
+  --profile default
+```
+
+Add a file-based alias:
+
+```bash
+bitwarden-agent-secrets policy add prod_ssh_key \
+  --secret-id be8e0ad8-d545-4017-a55a-b02f014d4158 \
+  --mode file \
+  --env SSH_KEY_FILE \
+  --profile prod \
+  --requires-approval
+```
+
+Remove an alias:
+
+```bash
+bitwarden-agent-secrets policy remove github_token
+```
+
+Validate `policy.json`:
+
+```bash
+bitwarden-agent-secrets policy validate
+```
+
 ## Usage
 
 ### Inject a secret as an environment variable
@@ -217,6 +260,15 @@ bitwarden-agent-secrets profile list
 bitwarden-agent-secrets profile add prod
 bitwarden-agent-secrets profile use prod
 bitwarden-agent-secrets profile remove staging
+```
+
+### Manage policy allowlist
+
+```bash
+bitwarden-agent-secrets policy list
+bitwarden-agent-secrets policy add github_token --secret-id <id> --mode env --env GITHUB_TOKEN --profile default
+bitwarden-agent-secrets policy remove github_token
+bitwarden-agent-secrets policy validate
 ```
 
 ## CLI Reference
@@ -296,6 +348,50 @@ bitwarden-agent-secrets reveal github_token
 
 This command should be considered disabled by default and only allowed when explicitly enabled in policy.
 
+### `policy list`
+
+Show configured allowlist aliases.
+
+```bash
+bitwarden-agent-secrets policy list
+```
+
+### `policy add`
+
+Add or replace a policy alias.
+
+```bash
+bitwarden-agent-secrets policy add github_token \
+  --secret-id 382580ab-1368-4e85-bfa3-b02e01400c9f \
+  --mode env \
+  --env GITHUB_TOKEN \
+  --profile default
+```
+
+Flags:
+
+- `--secret-id <id>`
+- `--mode <env|file>`
+- `--env <ENV>`
+- `--profile <name>` repeatable
+- `--requires-approval`
+
+### `policy remove`
+
+Remove a policy alias.
+
+```bash
+bitwarden-agent-secrets policy remove github_token
+```
+
+### `policy validate`
+
+Validate the local policy file.
+
+```bash
+bitwarden-agent-secrets policy validate
+```
+
 ### `audit tail`
 
 Show local audit records.
@@ -331,6 +427,8 @@ Security depends on:
 - secret search
 - raw Bitwarden pass-through
 - arbitrary fetch by user-supplied secret id
+
+The `policy` commands only manage the local alias allowlist. They do not enumerate or import every secret available to the Bitwarden token.
 
 ## Audit Logging
 
