@@ -1,8 +1,10 @@
 import { CliError } from "../errors/cli-error.js";
+import { readFlagValue } from "../utils/args.js";
 
 export interface ParsedRuntimeArgs {
   mappings: Array<{ alias: string; envName: string }>;
   command: string[];
+  profileName?: string;
 }
 
 export function parseRuntimeArgs(
@@ -16,6 +18,7 @@ export function parseRuntimeArgs(
 
   const optionArgs = args.slice(0, separatorIndex);
   const command = args.slice(separatorIndex + 1);
+  const profileName = readFlagValue(optionArgs, "--profile");
 
   if (command.length === 0) {
     throw new CliError(64, "Missing child command.");
@@ -24,6 +27,10 @@ export function parseRuntimeArgs(
   const mappings: Array<{ alias: string; envName: string }> = [];
   for (let index = 0; index < optionArgs.length; index += 1) {
     const token = optionArgs[index];
+    if (token === "--profile") {
+      index += 1;
+      continue;
+    }
     if (token !== flagName) {
       throw new CliError(64, `Unsupported argument: ${token}`);
     }
@@ -46,5 +53,5 @@ export function parseRuntimeArgs(
     throw new CliError(64, `At least one ${flagName} is required.`);
   }
 
-  return { mappings, command };
+  return { mappings, command, profileName };
 }

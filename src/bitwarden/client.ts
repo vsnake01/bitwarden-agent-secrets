@@ -1,7 +1,7 @@
-import type { ProfileConfig } from "../schemas/config-schema.js";
+import type { ResolvedProfileConfig } from "../schemas/config-schema.js";
 
 export class BitwardenClient {
-  constructor(private readonly profile: ProfileConfig) {}
+  constructor(private readonly profile: ResolvedProfileConfig) {}
 
   async ping(): Promise<void> {
     if (!this.profile.accessToken) {

@@ -63,7 +63,7 @@ The agent never receives direct Bitwarden API credentials.
 
 The CLI:
 
-1. Loads a local user config with a Bitwarden access token
+1. Loads a local user config with a credential store reference
 2. Loads a local policy file with allowed secret aliases
 3. Resolves an alias to a specific Bitwarden `secretId`
 4. Fetches the secret from Bitwarden
@@ -80,18 +80,22 @@ Run:
 bitwarden-agent-secrets init
 ```
 
-This creates a user config directory and stores your Bitwarden access token.
+This creates a user config directory and stores your Bitwarden access token in a credential backend.
 
 Default paths:
 
 - config directory: `~/.config/bitwarden-agent-secrets/`
+- state directory: `~/.local/state/bitwarden-agent-secrets/`
 - config file: `~/.config/bitwarden-agent-secrets/config.json`
+- credential file fallback dir: `~/.config/bitwarden-agent-secrets/credentials/`
 - policy file: `~/.config/bitwarden-agent-secrets/policy.json`
 - audit log: `~/.config/bitwarden-agent-secrets/audit.log`
+- runtime temp root: `~/.local/state/bitwarden-agent-secrets/tmp/`
 
 Permissions:
 
 - config directory: `0700`
+- state directory: `0700`
 - config file: `0600`
 - policy file: `0600`
 - audit log: `0600`
@@ -116,9 +120,13 @@ Example:
   "defaultProfile": "default",
   "profiles": {
     "default": {
-      "accessToken": "BWS_ACCESS_TOKEN_HERE",
       "apiUrl": "https://api.bitwarden.com",
-      "identityUrl": "https://identity.bitwarden.com"
+      "identityUrl": "https://identity.bitwarden.com",
+      "credentialStore": {
+        "type": "keychain",
+        "service": "bitwarden-agent-secrets",
+        "account": "default"
+      }
     }
   }
 }
@@ -126,10 +134,17 @@ Example:
 
 Notes:
 
-- `accessToken` is required
+- `credentialStore` is required
 - `apiUrl` and `identityUrl` may be omitted for Bitwarden Cloud
 - multiple profiles are supported
-- the access token is stored in plain text in MVP, so file permissions matter
+- `type=keychain` is preferred on macOS and Linux developer machines
+- `type=file` is an explicit fallback and stores the token in a `0600` file under `~/.config/bitwarden-agent-secrets/credentials/`
+
+Supported credential backends:
+
+- macOS: system Keychain via `security`
+- Linux: Secret Service / GNOME Keyring via `secret-tool`
+- fallback: local file backend with `0600` permissions
 
 ### `policy.json`
 
@@ -234,7 +249,7 @@ bitwarden-agent-secrets file --mount prod_ssh_key:SSH_KEY_FILE -- ssh -i "$SSH_K
 This flow:
 
 - resolves `prod_ssh_key`
-- writes the secret to a temporary file with `0600`
+- writes the secret to a temporary file with `0600` inside a user-private runtime directory
 - starts the command with `SSH_KEY_FILE=/path/to/tempfile`
 - deletes the temp file after execution
 
@@ -257,7 +272,8 @@ Checks include:
 
 ```bash
 bitwarden-agent-secrets profile list
-bitwarden-agent-secrets profile add prod
+bitwarden-agent-secrets profile add prod --credential-store keychain
+bitwarden-agent-secrets profile rotate-token prod --access-token-stdin
 bitwarden-agent-secrets profile use prod
 bitwarden-agent-secrets profile remove staging
 ```
@@ -284,7 +300,7 @@ bitwarden-agent-secrets init
 Supported behavior:
 
 - creates config directory
-- stores a Bitwarden access token
+- stores a Bitwarden access token in the selected credential backend
 - creates a config profile
 - creates a policy template if missing
 
@@ -292,6 +308,8 @@ Planned flags:
 
 ```bash
 bitwarden-agent-secrets init --profile default
+bitwarden-agent-secrets init --credential-store keychain
+bitwarden-agent-secrets init --credential-store file
 bitwarden-agent-secrets init --access-token-stdin
 bitwarden-agent-secrets init --api-url https://api.bitwarden.example.com
 bitwarden-agent-secrets init --identity-url https://identity.bitwarden.example.com
@@ -319,6 +337,7 @@ Inject one or more secrets as environment variables into a command.
 
 ```bash
 bitwarden-agent-secrets exec --map github_token:GITHUB_TOKEN -- gh auth status
+bitwarden-agent-secrets exec --profile prod --map deploy_token:DEPLOY_TOKEN -- your-command
 ```
 
 Multiple mappings are allowed:
@@ -336,7 +355,19 @@ Inject one or more secrets as temporary files.
 
 ```bash
 bitwarden-agent-secrets file --mount prod_ssh_key:SSH_KEY_FILE -- ssh -i "$SSH_KEY_FILE" user@host
+bitwarden-agent-secrets file --profile prod --mount prod_ssh_key:SSH_KEY_FILE -- ssh -i "$SSH_KEY_FILE" user@host
 ```
+
+### `profile rotate-token`
+
+Rotate or migrate the stored Bitwarden access token for an existing profile.
+
+```bash
+bitwarden-agent-secrets profile rotate-token prod --access-token-stdin
+bitwarden-agent-secrets profile rotate-token prod --credential-store file --access-token-stdin
+```
+
+This command can also migrate a profile between `keychain` and `file` storage.
 
 ### `reveal`
 
@@ -406,7 +437,7 @@ bitwarden-agent-secrets audit tail
 
 Security depends on:
 
-- keeping the Bitwarden access token protected
+- keeping the Bitwarden access token protected in the selected credential backend
 - limiting access through `policy.json`
 - using least privilege in Bitwarden
 - avoiding broad tokens with access to everything
@@ -416,6 +447,7 @@ Security depends on:
 - use a dedicated Bitwarden machine account for this tool
 - scope access only to the secrets actually needed
 - separate profiles for `dev`, `staging`, and `prod`
+- prefer `keychain` over `file`
 - keep `policy.json` small and explicit
 - prefer `exec` and `file` over printing secrets
 - rotate tokens and secrets regularly
@@ -454,6 +486,8 @@ Audit records do not include:
 - full environment contents
 - temporary file contents
 
+Temporary secret files are created only inside the user-owned runtime directory under `~/.local/state/bitwarden-agent-secrets/tmp/`, not in the shared system temp directory.
+
 ## Exit Codes
 
 Planned exit codes:
@@ -471,17 +505,18 @@ When running `exec` or `file`, the CLI should normally return the child process 
 
 Current MVP limitations:
 
-- the Bitwarden access token is stored in plain text in `config.json`
+- `keychain` depends on platform-native tooling being available
 - environment-variable injection is not safe against every local inspection vector
 - child process output is not guaranteed to be secret-safe
 - `requiresApproval` is metadata only in MVP
-- no OS keychain integration yet
+- `file` backend still stores the token in plain text, protected only by filesystem permissions
+- temporary secret files are best-effort cleaned up, but no file deletion scheme can guarantee wipe semantics on every filesystem
 
 ## Roadmap
 
 Post-MVP work:
 
-- OS keychain integration for access tokens
+- better interactive fallback behavior when secure credential storage is unavailable
 - approval flow for sensitive aliases
 - output masking
 - shell completions

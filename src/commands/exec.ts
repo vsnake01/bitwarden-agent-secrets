@@ -4,6 +4,7 @@ import { loadConfig } from "../config/load-config.js";
 import { loadPolicy } from "../config/load-policy.js";
 import { CliError } from "../errors/cli-error.js";
 import { parseRuntimeArgs } from "../runtime/parse-runtime-args.js";
+import { resolveProfileCredentials } from "../runtime/resolve-profile-credentials.js";
 import { resolveProfile } from "../runtime/resolve-profile.js";
 import { runCommand } from "../runtime/run-command.js";
 
@@ -11,8 +12,9 @@ export async function runExec(args: string[]): Promise<void> {
   const parsed = parseRuntimeArgs(args, "--map");
   const config = await loadConfig();
   const policy = await loadPolicy();
-  const { profileName, profile } = resolveProfile(config);
-  const client = new BitwardenClient(profile);
+  const { profileName, profile } = resolveProfile(config, parsed.profileName);
+  const resolvedProfile = await resolveProfileCredentials(profile);
+  const client = new BitwardenClient(resolvedProfile);
   const env: Record<string, string> = {};
 
   for (const mapping of parsed.mappings) {

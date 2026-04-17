@@ -4,7 +4,7 @@
 
 `bitwarden-agent-secrets` is a local CLI broker for agents and automation that:
 
-- stores a Bitwarden access token in user config
+- stores a Bitwarden access token in a credential backend referenced from user config
 - fetches secrets from Bitwarden Secrets Manager only through allowed aliases
 - prevents direct Bitwarden API access from the agent
 - injects secret values into a command through `env` or a temporary file
@@ -33,9 +33,9 @@ Examples:
 
 Each profile contains:
 
-- `accessToken`
 - `apiUrl`
 - `identityUrl`
+- `credentialStore`
 
 ### Policy
 
@@ -72,16 +72,20 @@ Runtime execution is the process of:
 Base directory:
 
 - `~/.config/bitwarden-agent-secrets/`
+- `~/.local/state/bitwarden-agent-secrets/`
 
 Files:
 
 - `config.json`
+- credential file fallback dir under `~/.config/bitwarden-agent-secrets/credentials/`
 - `policy.json`
 - `audit.log`
+- runtime temp files under `~/.local/state/bitwarden-agent-secrets/tmp/`
 
 Permissions:
 
 - directory: `0700`
+- state directory: `0700`
 - `config.json`: `0600`
 - `policy.json`: `0600`
 - `audit.log`: `0600`
@@ -104,9 +108,13 @@ Example:
   "defaultProfile": "default",
   "profiles": {
     "default": {
-      "accessToken": "BWS_ACCESS_TOKEN_HERE",
       "apiUrl": "https://api.bitwarden.com",
-      "identityUrl": "https://identity.bitwarden.com"
+      "identityUrl": "https://identity.bitwarden.com",
+      "credentialStore": {
+        "type": "keychain",
+        "service": "bitwarden-agent-secrets",
+        "account": "default"
+      }
     }
   }
 }
@@ -117,13 +125,18 @@ Rules:
 - `version` is required
 - `defaultProfile` is required
 - `profiles` is required
-- `accessToken` is required for each profile
+- `credentialStore` is required for each profile
 - `apiUrl` and `identityUrl` are optional for Bitwarden Cloud
+- `credentialStore.type` may be `keychain` or `file`
 
-MVP storage model:
+Credential storage model:
 
-- `accessToken` is stored as plain text
-- file permissions must be enforced
+- `keychain` is preferred on macOS and Linux developer machines
+- macOS uses system Keychain via `security`
+- Linux uses Secret Service / GNOME Keyring via `secret-tool`
+- `file` is an explicit fallback backend
+- file backend stores the token in `~/.config/bitwarden-agent-secrets/credentials/<profile>.token`
+- file backend paths must be protected with `0600`
 
 ## Policy Specification
 
@@ -201,6 +214,7 @@ Prompts:
 Flags:
 
 - `--profile <name>`
+- `--credential-store <keychain|file>`
 - `--access-token-stdin`
 - `--api-url <url>`
 - `--identity-url <url>`
@@ -209,6 +223,7 @@ Flags:
 Behavior:
 
 - create config directory if missing
+- store access token in the selected credential backend
 - write `config.json`
 - ensure correct permissions
 - create `policy.json` template if missing
@@ -232,7 +247,8 @@ Checks:
 - `config.json` exists
 - `defaultProfile` exists
 - file permissions are correct
-- access token is usable
+- credential store reference is valid
+- access token can be loaded from the credential backend
 - Bitwarden API is reachable
 - `policy.json` is valid
 - all configured aliases reference accessible secrets
@@ -269,6 +285,20 @@ Purpose:
 Behavior:
 
 - same credential capture flow as `init`
+- selected credential backend must be stored in `config.json`
+
+### `bitwarden-agent-secrets profile rotate-token <name>`
+
+Purpose:
+
+- rotate the access token for an existing profile
+- optionally migrate the profile to a different credential backend
+
+Behavior:
+
+- reads a new access token from stdin or environment
+- rewrites the credential in the selected backend
+- if backend changes, removes the old stored credential
 
 ### `bitwarden-agent-secrets profile remove <name>`
 
@@ -279,6 +309,7 @@ Purpose:
 Rules:
 
 - must reject removing the active default profile unless changed first
+- should remove the associated credential from the credential backend
 
 ### `bitwarden-agent-secrets policy list`
 
@@ -336,6 +367,7 @@ bitwarden-agent-secrets exec --map github_token:GITHUB_TOKEN -- gh auth status
 Rules:
 
 - multiple `--map` flags are allowed
+- optional `--profile <name>` selects a non-default profile
 - each alias must exist in policy
 - each alias must have `mode=env`
 - the selected profile must be allowed by policy
@@ -365,9 +397,12 @@ bitwarden-agent-secrets file --mount prod_ssh_key:SSH_KEY_FILE -- ssh -i "$SSH_K
 Rules:
 
 - multiple `--mount` flags are allowed
+- optional `--profile <name>` selects a non-default profile
 - each alias must exist in policy
 - each alias must have `mode=file`
 - temporary files must be created with `0600`
+- temporary runtime directories must be created under `~/.local/state/bitwarden-agent-secrets/tmp/`
+- temporary runtime directories must be created with `0700`
 - temporary files must be removed after execution
 
 ### `bitwarden-agent-secrets reveal <alias>`
@@ -418,7 +453,7 @@ Execution flow:
 3. load `policy.json`
 4. validate aliases
 5. fetch secret values from Bitwarden
-6. create temporary files with `0600`
+6. create temporary files with `0600` inside a user-private runtime directory
 7. inject file paths into child process environment
 8. run command
 9. remove temporary files
@@ -447,6 +482,7 @@ Must not log:
 - access tokens
 - full environment values
 - temp file contents
+- temp file paths unless explicitly needed for local debug output
 
 ## Security Requirements
 
@@ -457,17 +493,19 @@ Required for MVP:
 - no arbitrary secret id input in runtime commands
 - hidden token capture in interactive init flow
 - `0600` enforcement for sensitive files
+- `0600` enforcement for file credential backend
 - `0600` enforcement for temporary secret files
 - cleanup in `finally`-style execution paths where possible
 - no secret values in normal logs or error messages
 
 ## Known MVP Limitations
 
-- `accessToken` is stored in plain text in `config.json`
+- `keychain` depends on platform-native tools being installed and usable
 - environment variable injection is not secure against every local inspection path
 - child process output may still expose secrets if the child prints them
 - `requiresApproval` is metadata only
-- no OS keychain integration in MVP
+- `file` backend still stores the token in plain text, protected only by filesystem permissions
+- cleanup is best-effort and does not guarantee secure wipe semantics on every filesystem
 
 ## Suggested Node.js Project Layout
 
@@ -542,7 +580,7 @@ bitwarden-agent-secrets file --mount prod_ssh_key:SSH_KEY_FILE -- ssh -i "$SSH_K
 
 ## Post-MVP
 
-- OS keychain backend for access tokens
+- better interactive fallback behavior when secure credential storage is unavailable
 - approval flow for `requiresApproval`
 - output masking
 - shell completions

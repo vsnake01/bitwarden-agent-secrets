@@ -28,4 +28,22 @@ function validateConfig(config: ConfigFile): void {
   if (!config.profiles || typeof config.profiles !== "object") {
     throw new CliError(2, "Config is missing profiles.");
   }
+
+  for (const [profileName, profile] of Object.entries(config.profiles)) {
+    if (!profile.credentialStore || typeof profile.credentialStore !== "object") {
+      throw new CliError(2, `Profile ${profileName} is missing credentialStore.`);
+    }
+    if (profile.credentialStore.type !== "keychain" && profile.credentialStore.type !== "file") {
+      throw new CliError(2, `Profile ${profileName} has unsupported credentialStore type.`);
+    }
+    if (
+      profile.credentialStore.type === "keychain" &&
+      (!profile.credentialStore.service || !profile.credentialStore.account)
+    ) {
+      throw new CliError(2, `Profile ${profileName} has invalid keychain credentialStore.`);
+    }
+    if (profile.credentialStore.type === "file" && !profile.credentialStore.path) {
+      throw new CliError(2, `Profile ${profileName} has invalid file credentialStore.`);
+    }
+  }
 }
