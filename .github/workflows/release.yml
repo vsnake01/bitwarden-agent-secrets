@@ -1,0 +1,52 @@
+name: Release
+
+on:
+  release:
+    types:
+      - published
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  attestations: write
+  id-token: write
+
+jobs:
+  package:
+    name: Build, attest, and publish release artifacts
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
+        with:
+          node-version: 22
+          cache: npm
+          registry-url: https://registry.npmjs.org
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run test suite
+        run: npm test
+
+      - name: Build release tarball
+        run: npm pack
+
+      - name: Attest release tarball provenance
+        uses: actions/attest-build-provenance@43d14bc2b83dec42d39ecae14e916627a18bb661 # v3
+        with:
+          subject-path: "*.tgz"
+
+      - name: Upload tarball to GitHub release
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "${{ github.event.release.tag_name }}" *.tgz --clobber
+
+      - name: Publish package to npm with provenance
+        if: github.event_name == 'release' && vars.NPM_PUBLISH == 'true'
+        run: npm publish *.tgz --provenance --access public

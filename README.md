@@ -37,6 +37,9 @@ Storing those secrets in local files, repo configs, or agent-specific state is a
 - CI, CodeQL, dependency audit, and secret scanning run in GitHub Actions
 - OpenSSF Scorecard publishes a repository security posture score
 - Dependabot is configured for npm packages and GitHub Actions
+- GitHub Actions are pinned to immutable commit SHAs
+- `CODEOWNERS` is present for review enforcement
+- Release artifacts are built with provenance attestations in GitHub Actions
 - OWASP ASVS is treated as guidance, not as a formal certification target for this CLI package
 
 More details are documented in [SECURITY.md](SECURITY.md).

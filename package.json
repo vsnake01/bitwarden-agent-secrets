@@ -2,8 +2,16 @@
   "name": "bitwarden-agent-secrets",
   "version": "0.1.0",
   "description": "Local CLI broker for agents and automation using Bitwarden Secrets Manager.",
-  "license": "UNLICENSED",
+  "license": "MIT",
   "type": "module",
+  "homepage": "https://github.com/vsnake01/bitwarden-agent-secrets",
+  "bugs": {
+    "url": "https://github.com/vsnake01/bitwarden-agent-secrets/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vsnake01/bitwarden-agent-secrets.git"
+  },
   "bin": {
     "bitwarden-agent-secrets": "./dist/cli.js"
   },
