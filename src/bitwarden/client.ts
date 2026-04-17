@@ -37,9 +37,16 @@ export class BitwardenClient {
   }
 
   async getSecret(secretId: string): Promise<string> {
-    const client = await this.getAuthenticatedClient();
-    const secret = await client.secrets().get(secretId);
-    return secret.value;
+    try {
+      const client = await this.getAuthenticatedClient();
+      const secret = await client.secrets().get(secretId);
+      return secret.value;
+    } catch (error) {
+      throw mapBitwardenError(
+        error,
+        `Failed to retrieve Bitwarden secret ${secretId} for profile ${this.profileName}.`,
+      );
+    }
   }
 
   private async getAuthenticatedClient(): Promise<SdkClientInstance> {
@@ -64,9 +71,34 @@ export class BitwardenClient {
 
     const client = new sdk.BitwardenClient(settings, sdk.LogLevel.Error);
     const statePath = getBitwardenStatePath(this.profileName);
-    await client.auth().loginAccessToken(this.profile.accessToken, statePath);
+    try {
+      await client.auth().loginAccessToken(this.profile.accessToken, statePath);
+    } catch (error) {
+      throw mapBitwardenError(
+        error,
+        `Bitwarden authentication failed for profile ${this.profileName}. Verify the access token and Bitwarden URLs.`,
+      );
+    }
     await chmodSafe(statePath, 0o600);
 
     return client;
   }
+}
+
+function mapBitwardenError(error: unknown, fallbackMessage: string): Error {
+  if (!(error instanceof Error)) {
+    return new Error(fallbackMessage);
+  }
+
+  const message = error.message.trim();
+
+  if (/unauthorized|authentication|forbidden|invalid access token|invalid token/i.test(message)) {
+    return new Error(`${fallbackMessage} ${message}`);
+  }
+
+  if (/dns|network|timed out|timeout|connect|connection|socket|tls/i.test(message)) {
+    return new Error(`${fallbackMessage} Bitwarden connection error: ${message}`);
+  }
+
+  return new Error(`${fallbackMessage} ${message}`);
 }

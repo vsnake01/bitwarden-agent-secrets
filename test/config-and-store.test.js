@@ -8,7 +8,9 @@ import {
   buildCredentialStoreRef,
   deleteAccessToken,
   loadAccessToken,
+  resetCredentialCommandRunnersForTests,
   saveAccessToken,
+  setCredentialCommandRunnersForTests,
 } from "../dist/credentials/store.js";
 import { getConfigPath, getCredentialFilePath } from "../dist/config/paths.js";
 
@@ -132,5 +134,57 @@ test(
     process.env.HOME = previousHome;
     await cleanupTempHome(homePath);
   }
+  },
+);
+
+test("keychain backend surfaces actionable missing-tool guidance", { concurrency: false }, async () => {
+  const store = {
+    type: "keychain",
+    service: "bitwarden-agent-secrets",
+    account: "default",
+  };
+
+  try {
+    setCredentialCommandRunnersForTests({
+      execFileRunner: async () => {
+        const error = new Error("spawn tool ENOENT");
+        Object.assign(error, { code: "ENOENT" });
+        throw error;
+      },
+    });
+
+    await assert.rejects(
+      () => loadAccessToken(store),
+      /not available|use --credential-store file/i,
+    );
+  } finally {
+    resetCredentialCommandRunnersForTests();
+  }
+});
+
+test(
+  "linux secret service locked errors are mapped clearly",
+  { concurrency: false, skip: process.platform !== "linux" },
+  async () => {
+    const store = {
+      type: "keychain",
+      service: "bitwarden-agent-secrets",
+      account: "default",
+    };
+
+    try {
+      setCredentialCommandRunnersForTests({
+        execFileRunner: async () => {
+          throw new Error("Cannot create an item in a locked collection");
+        },
+      });
+
+      await assert.rejects(
+        () => loadAccessToken(store),
+        /Secret Service is unavailable or locked/i,
+      );
+    } finally {
+      resetCredentialCommandRunnersForTests();
+    }
   },
 );

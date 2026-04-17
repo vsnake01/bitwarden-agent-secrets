@@ -110,3 +110,95 @@ test("BitwardenClient creates a profile state path under user state directory", 
     await cleanupTempHome(homePath);
   }
 });
+
+test("BitwardenClient maps authentication failures to actionable messages", { concurrency: false }, async () => {
+  const homePath = await makeTempHome();
+
+  try {
+    setBitwardenSdkLoaderForTests(async () => ({
+      BitwardenClient: class {
+        auth() {
+          return {
+            loginAccessToken: async () => {
+              throw new Error("Unauthorized");
+            },
+          };
+        }
+
+        secrets() {
+          return {
+            get: async () => ({ value: "unused" }),
+          };
+        }
+      },
+      DeviceType: { SDK: "SDK" },
+      LogLevel: { Error: 4 },
+    }));
+
+    await withPatchedEnv({ HOME: homePath }, async () => {
+      const client = new BitwardenClient("default", {
+        accessToken: "bad-token",
+        apiUrl: "https://api.bitwarden.com",
+        identityUrl: "https://identity.bitwarden.com",
+        credentialStore: {
+          type: "file",
+          path: "/unused",
+        },
+      });
+
+      await assert.rejects(
+        () => client.ping(),
+        /Bitwarden authentication failed for profile default.*Unauthorized/,
+      );
+    });
+  } finally {
+    resetBitwardenSdkLoaderForTests();
+    await cleanupTempHome(homePath);
+  }
+});
+
+test("BitwardenClient maps secret retrieval failures to actionable messages", { concurrency: false }, async () => {
+  const homePath = await makeTempHome();
+
+  try {
+    setBitwardenSdkLoaderForTests(async () => ({
+      BitwardenClient: class {
+        auth() {
+          return {
+            loginAccessToken: async () => {},
+          };
+        }
+
+        secrets() {
+          return {
+            get: async () => {
+              throw new Error("socket hang up");
+            },
+          };
+        }
+      },
+      DeviceType: { SDK: "SDK" },
+      LogLevel: { Error: 4 },
+    }));
+
+    await withPatchedEnv({ HOME: homePath }, async () => {
+      const client = new BitwardenClient("default", {
+        accessToken: "good-token",
+        apiUrl: "https://api.bitwarden.com",
+        identityUrl: "https://identity.bitwarden.com",
+        credentialStore: {
+          type: "file",
+          path: "/unused",
+        },
+      });
+
+      await assert.rejects(
+        () => client.getSecret("secret-1"),
+        /secret-1.*Bitwarden connection error: socket hang up/i,
+      );
+    });
+  } finally {
+    resetBitwardenSdkLoaderForTests();
+    await cleanupTempHome(homePath);
+  }
+});
