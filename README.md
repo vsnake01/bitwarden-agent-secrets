@@ -1,5 +1,9 @@
 # bitwarden-agent-secrets
 
+[![CI](https://github.com/vsnake01/bitwarden-agent-secrets/actions/workflows/ci.yml/badge.svg)](https://github.com/vsnake01/bitwarden-agent-secrets/actions/workflows/ci.yml)
+[![Node.js](https://img.shields.io/badge/node-%3E%3D20-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
+[![Tests](https://img.shields.io/badge/tests-node__test-5A67D8)](https://github.com/vsnake01/bitwarden-agent-secrets/actions/workflows/ci.yml)
+
 A local CLI broker for agents and automation that retrieves secrets from Bitwarden Secrets Manager through a controlled allowlist.
 
 Instead of giving an agent direct access to Bitwarden, `bitwarden-agent-secrets` exposes only predefined aliases from a local policy file and injects secret values into a command at runtime.
