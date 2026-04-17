@@ -4,14 +4,32 @@ updates:
     directory: /
     schedule:
       interval: weekly
-    open-pull-requests-limit: 10
+    open-pull-requests-limit: 5
     commit-message:
       prefix: deps
+    groups:
+      runtime-dependencies:
+        dependency-type: production
+      dev-tooling:
+        dependency-type: development
+        patterns:
+          - "ts-node"
+    ignore:
+      - dependency-name: "typescript"
+        update-types:
+          - "version-update:semver-major"
+      - dependency-name: "@types/node"
+        update-types:
+          - "version-update:semver-major"
 
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
-    open-pull-requests-limit: 10
+    open-pull-requests-limit: 3
     commit-message:
       prefix: ci
+    groups:
+      github-actions:
+        patterns:
+          - "*"
