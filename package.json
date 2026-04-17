@@ -1,0 +1,28 @@
+{
+  "name": "bitwarden-agent-secrets",
+  "version": "0.1.0",
+  "description": "Local CLI broker for agents and automation using Bitwarden Secrets Manager.",
+  "license": "UNLICENSED",
+  "type": "module",
+  "bin": {
+    "bitwarden-agent-secrets": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "SPEC.md"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check": "tsc --noEmit -p tsconfig.json",
+    "dev": "node --enable-source-maps --loader ts-node/esm src/cli.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^24.5.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.2"
+  }
+}
