@@ -1,6 +1,10 @@
 # bitwarden-agent-secrets
 
 [![CI](https://github.com/vsnake01/bitwarden-agent-secrets/actions/workflows/ci.yml/badge.svg)](https://github.com/vsnake01/bitwarden-agent-secrets/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/vsnake01/bitwarden-agent-secrets/actions/workflows/codeql.yml/badge.svg)](https://github.com/vsnake01/bitwarden-agent-secrets/actions/workflows/codeql.yml)
+[![Dependency Audit](https://github.com/vsnake01/bitwarden-agent-secrets/actions/workflows/dependency-audit.yml/badge.svg)](https://github.com/vsnake01/bitwarden-agent-secrets/actions/workflows/dependency-audit.yml)
+[![Gitleaks](https://github.com/vsnake01/bitwarden-agent-secrets/actions/workflows/gitleaks.yml/badge.svg)](https://github.com/vsnake01/bitwarden-agent-secrets/actions/workflows/gitleaks.yml)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/vsnake01/bitwarden-agent-secrets/badge)](https://scorecard.dev/viewer/?uri=github.com/vsnake01/bitwarden-agent-secrets)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D20-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
 [![Tests](https://img.shields.io/badge/tests-node__test-5A67D8)](https://github.com/vsnake01/bitwarden-agent-secrets/actions/workflows/ci.yml)
 
@@ -27,6 +31,15 @@ Storing those secrets in local files, repo configs, or agent-specific state is a
 - Inject secrets into a process through environment variables or temporary files
 - Avoid storing secrets in project files or shell history
 - Keep a local audit trail without logging secret values
+
+## Security Signals
+
+- CI, CodeQL, dependency audit, and secret scanning run in GitHub Actions
+- OpenSSF Scorecard publishes a repository security posture score
+- Dependabot is configured for npm packages and GitHub Actions
+- OWASP ASVS is treated as guidance, not as a formal certification target for this CLI package
+
+More details are documented in [SECURITY.md](SECURITY.md).
 
 ## Non-goals
 
