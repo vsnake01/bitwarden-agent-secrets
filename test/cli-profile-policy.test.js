@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { access, readFile, readdir } from "node:fs/promises";
+import { access, chmod, readFile, readdir } from "node:fs/promises";
 
 import {
   resetBitwardenSdkLoaderForTests,
@@ -21,11 +21,13 @@ import { runProfileRotateToken } from "../dist/commands/profile-rotate-token.js"
 import { runProfileUse } from "../dist/commands/profile-use.js";
 
 import {
+  captureStderr,
   captureStdout,
   cleanupTempHome,
   makeTempHome,
   pathInHome,
   readJson,
+  runCli,
   withPatchedEnv,
 } from "./helpers.js";
 
@@ -66,6 +68,28 @@ function installFakeBitwardenSdk() {
   }));
 
   return calls;
+}
+
+function installFailingBitwardenSdk(failure) {
+  setBitwardenSdkLoaderForTests(async () => ({
+    BitwardenClient: class FakeSdkClient {
+      auth() {
+        return {
+          loginAccessToken: async () => {},
+        };
+      }
+
+      secrets() {
+        return {
+          get: async () => {
+            throw failure;
+          },
+        };
+      }
+    },
+    DeviceType: { SDK: "SDK" },
+    LogLevel: { Error: 4 },
+  }));
 }
 
 test(
@@ -136,7 +160,17 @@ test(
       );
       assert.ok(config.profiles.default);
       assert.ok(config.profiles.prod);
-      assert.equal(config.defaultProfile, "prod");
+      assert.equal(config.defaultProfile, "default");
+
+      await withPatchedEnv(
+        { HOME: homePath, BWS_ACCESS_TOKEN: "token-3" },
+        () => runInit(["--credential-store", "file", "--profile", "prod", "--set-default"]),
+      );
+
+      const updatedConfig = await readJson(
+        pathInHome(homePath, ".config", "bitwarden-agent-secrets", "config.json"),
+      );
+      assert.equal(updatedConfig.defaultProfile, "prod");
     } finally {
       await cleanupTempHome(homePath);
     }
@@ -230,6 +264,10 @@ test(
           "GITHUB_TOKEN",
           "--profile",
           "default",
+          "--allowed-command",
+          "gh",
+          "--allowed-command",
+          "git",
         ]),
       );
 
@@ -238,15 +276,28 @@ test(
       );
       assert.match(policyList, /github_token/);
       assert.match(policyList, /mode=env/);
+      assert.match(policyList, /allowed=gh,git/);
 
       const doctorOutput = await withPatchedEnv({ HOME: homePath }, () =>
         captureStdout(() => runDoctor(["--profile", "default"])),
       );
-      assert.match(doctorOutput, /Credential store: file/);
-      assert.match(doctorOutput, /Configured aliases: 1/);
-      assert.equal(calls.logins.length, 1);
+      assert.match(doctorOutput, /Doctor summary: PASS/);
+      assert.match(doctorOutput, /\[pass\] C1 config.json exists/);
+      assert.match(doctorOutput, /\[pass\] B3 alias github_token can be fetched/);
+
+      const doctorJson = await withPatchedEnv({ HOME: homePath }, () =>
+        captureStdout(() => runDoctor(["--profile", "default", "--json"])),
+      );
+      const report = JSON.parse(doctorJson);
+      assert.equal(report.profile, "default");
+      assert.equal(report.summary.failed, 0);
+      assert.ok(report.checks.some((check) => check.id === "B3" && check.status === "pass"));
+      assert.equal(calls.logins.length, 2);
       assert.equal(calls.logins[0].accessToken, "token-1");
+      assert.equal(calls.logins[1].accessToken, "token-1");
       assert.match(calls.logins[0].stateFile, /bitwarden\/default\.json$/);
+      assert.match(calls.logins[1].stateFile, /bitwarden\/default\.json$/);
+      assert.deepEqual(calls.gets, ["secret-123", "secret-123"]);
 
       const validateOutput = await withPatchedEnv({ HOME: homePath }, () =>
         captureStdout(() => runPolicyValidate([])),
@@ -286,6 +337,81 @@ test(
           ),
         /Missing child command/,
       );
+    } finally {
+      await cleanupTempHome(homePath);
+    }
+  },
+);
+
+test(
+  "policy add warns about dangerous shell interpreters in allowedCommands",
+  { concurrency: false },
+  async () => {
+    const homePath = await makeTempHome();
+
+    try {
+      await withPatchedEnv(
+        { HOME: homePath, BWS_ACCESS_TOKEN: "token-1" },
+        () => runInit(["--credential-store", "file", "--profile", "default"]),
+      );
+
+      const stderr = await withPatchedEnv({ HOME: homePath }, () =>
+        captureStderr(() =>
+          runPolicyAdd([
+            "github_token",
+            "--secret-id",
+            "secret-123",
+            "--mode",
+            "env",
+            "--env",
+            "GITHUB_TOKEN",
+            "--profile",
+            "default",
+            "--allowed-command",
+            "sh",
+          ]),
+        ),
+      );
+
+      assert.match(stderr, /Warning: allowed command 'sh' effectively allows arbitrary execution/);
+    } finally {
+      await cleanupTempHome(homePath);
+    }
+  },
+);
+
+test(
+  "doctor reports failing permission checks in json mode",
+  { concurrency: false },
+  async () => {
+    const homePath = await makeTempHome();
+
+    try {
+      await withPatchedEnv(
+        { HOME: homePath, BWS_ACCESS_TOKEN: "token-1" },
+        () => runInit(["--credential-store", "file", "--profile", "default"]),
+      );
+
+      await chmod(
+        pathInHome(homePath, ".config", "bitwarden-agent-secrets", "config.json"),
+        0o644,
+      );
+
+      await assert.rejects(
+        () =>
+          withPatchedEnv({ HOME: homePath }, () => runDoctor(["--profile", "default"])),
+        /C2 config\.json mode must be 0600/,
+      );
+
+      const doctorJson = await withPatchedEnv({ HOME: homePath }, () =>
+        captureStdout(() => runDoctor(["--profile", "default", "--json"])),
+      );
+      const report = JSON.parse(doctorJson);
+      const modeCheck = report.checks.find((check) => check.id === "C2");
+      assert.equal(modeCheck.status, "fail");
+      assert.equal(modeCheck.severity, "error");
+      assert.match(modeCheck.message, /expected 0600, got 0644/);
+      assert.equal(report.summary.failed, 1);
     } finally {
       await cleanupTempHome(homePath);
     }
@@ -367,6 +493,173 @@ test(
     } finally {
       resetBitwardenSdkLoaderForTests();
       process.exitCode = undefined;
+      await cleanupTempHome(homePath);
+    }
+  },
+);
+
+test(
+  "exec and file enforce allowedCommands before fetching secrets",
+  { concurrency: false },
+  async () => {
+    const homePath = await makeTempHome();
+    const calls = installFakeBitwardenSdk();
+
+    try {
+      await withPatchedEnv(
+        { HOME: homePath, BWS_ACCESS_TOKEN: "token-1" },
+        () => runInit(["--credential-store", "file", "--profile", "default"]),
+      );
+
+      await withPatchedEnv({ HOME: homePath }, () =>
+        runPolicyAdd([
+          "api_token",
+          "--secret-id",
+          "secret-env",
+          "--mode",
+          "env",
+          "--env",
+          "API_TOKEN",
+          "--profile",
+          "default",
+          "--allowed-command",
+          "git",
+        ]),
+      );
+
+      await withPatchedEnv({ HOME: homePath }, () =>
+        runPolicyAdd([
+          "ssh_key",
+          "--secret-id",
+          "secret-file",
+          "--mode",
+          "file",
+          "--env",
+          "SSH_KEY_FILE",
+          "--profile",
+          "default",
+          "--allowed-command",
+          "ssh",
+        ]),
+      );
+
+      await assert.rejects(
+        () =>
+          withPatchedEnv({ HOME: homePath }, () =>
+            runExec(["--map", "api_token:API_TOKEN", "--", "curl", "https://example.com"]),
+          ),
+        /Alias api_token is not allowed for command 'curl'/,
+      );
+
+      await assert.rejects(
+        () =>
+          withPatchedEnv({ HOME: homePath }, () =>
+            runFile(["--mount", "ssh_key:SSH_KEY_FILE", "--", "scp", "file", "host:dest"]),
+          ),
+        /Alias ssh_key is not allowed for command 'scp'/,
+      );
+
+      assert.deepEqual(calls.gets, []);
+    } finally {
+      resetBitwardenSdkLoaderForTests();
+      await cleanupTempHome(homePath);
+    }
+  },
+);
+
+test(
+  "exec writes audit records for policy violations and fetch errors",
+  { concurrency: false },
+  async () => {
+    const homePath = await makeTempHome();
+
+    try {
+      await withPatchedEnv(
+        { HOME: homePath, BWS_ACCESS_TOKEN: "token-1" },
+        () => runInit(["--credential-store", "file", "--profile", "default"]),
+      );
+
+      await withPatchedEnv({ HOME: homePath }, () =>
+        runPolicyAdd([
+          "api_token",
+          "--secret-id",
+          "secret-env",
+          "--mode",
+          "env",
+          "--env",
+          "API_TOKEN",
+          "--profile",
+          "default",
+          "--allowed-command",
+          "git",
+        ]),
+      );
+
+      await assert.rejects(
+        () =>
+          withPatchedEnv({ HOME: homePath }, () =>
+            runExec(["--map", "api_token:API_TOKEN", "--", "curl", "https://example.com"]),
+          ),
+        /Alias api_token is not allowed for command 'curl'/,
+      );
+
+      const firstAuditLog = await readFile(
+        pathInHome(homePath, ".config", "bitwarden-agent-secrets", "audit.log"),
+        "utf8",
+      );
+      const firstRecord = JSON.parse(firstAuditLog.trim());
+      assert.equal(firstRecord.alias, "api_token");
+      assert.deepEqual(firstRecord.aliases, ["api_token"]);
+      assert.equal(firstRecord.result, "policy_violation");
+      assert.equal(firstRecord.exitCode, 65);
+      assert.equal(firstRecord.errorKind, "CliError");
+      assert.equal(firstRecord.allowedCommand, "fail");
+
+      installFailingBitwardenSdk(new Error("network timeout"));
+
+      await assert.rejects(
+        () =>
+          withPatchedEnv({ HOME: homePath }, () =>
+            runExec(["--map", "api_token:API_TOKEN", "--", "git", "status"]),
+          ),
+        /Bitwarden connection error: network timeout/,
+      );
+
+      const auditLog = await readFile(
+        pathInHome(homePath, ".config", "bitwarden-agent-secrets", "audit.log"),
+        "utf8",
+      );
+      const records = auditLog
+        .trim()
+        .split("\n")
+        .map((line) => JSON.parse(line));
+      const secondRecord = records[1];
+      assert.equal(secondRecord.result, "fetch_error");
+      assert.equal(secondRecord.exitCode, 1);
+      assert.equal(secondRecord.errorKind, "Error");
+      assert.equal(secondRecord.allowedCommand, "pass");
+    } finally {
+      resetBitwardenSdkLoaderForTests();
+      await cleanupTempHome(homePath);
+    }
+  },
+);
+
+test(
+  "cli no longer exposes reveal",
+  { concurrency: false },
+  async () => {
+    const homePath = await makeTempHome();
+
+    try {
+      const help = await runCli(homePath, ["--help"]);
+      assert.equal(help.exitCode, 0);
+      assert.doesNotMatch(help.stdout, /\breveal\b/);
+
+      const reveal = await runCli(homePath, ["reveal", "github_token"]);
+      assert.equal(reveal.exitCode, 64);
+      assert.match(reveal.stderr, /Unknown command: reveal/);
+    } finally {
       await cleanupTempHome(homePath);
     }
   },

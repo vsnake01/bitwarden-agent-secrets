@@ -1,12 +1,15 @@
 import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { execFile } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 export const repoRoot = path.resolve(__dirname, "..");
+const execFileAsync = promisify(execFile);
 
 export async function makeTempHome() {
   return mkdtemp(path.join(os.tmpdir(), "bas-test-home-"));
@@ -95,4 +98,29 @@ export async function captureStderr(fn) {
 
 export function pathInHome(homePath, ...segments) {
   return path.join(homePath, ...segments);
+}
+
+export async function runCli(homePath, args, extraEnv = {}) {
+  try {
+    const result = await execFileAsync(process.execPath, [path.join(repoRoot, "dist", "cli.js"), ...args], {
+      cwd: repoRoot,
+      env: {
+        ...process.env,
+        HOME: homePath,
+        ...extraEnv,
+      },
+    });
+
+    return {
+      exitCode: 0,
+      stdout: result.stdout,
+      stderr: result.stderr,
+    };
+  } catch (error) {
+    return {
+      exitCode: error.code ?? 1,
+      stdout: error.stdout ?? "",
+      stderr: error.stderr ?? "",
+    };
+  }
 }

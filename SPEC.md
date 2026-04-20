@@ -1,107 +1,29 @@
 # bitwarden-agent-secrets Specification
 
+## Product Position
+
+`bitwarden-agent-secrets` is a local CLI broker. It is intentionally built for workstation-local agent and automation use, not for CI orchestration, remote brokering, or multi-user deployment.
+
 ## Scope
 
-`bitwarden-agent-secrets` is a local CLI broker for agents and automation that:
+The tool:
 
-- stores a Bitwarden access token in a credential backend referenced from user config
-- fetches secrets from Bitwarden Secrets Manager only through allowed aliases
-- prevents direct Bitwarden API access from the agent
-- injects secret values into a command through `env` or a temporary file
+- stores a Bitwarden access token in a selected local credential backend
+- resolves only aliases defined in local policy
+- fetches secrets from Bitwarden Secrets Manager on demand
+- injects secret values into one child process through environment variables or temporary files
 - writes local audit records without storing secret values
 
-Not in MVP:
+The tool does not:
 
-- daemon mode
-- GUI
-- remote service mode
-- multi-user shared deployment
-- dynamic credential generation
-- secret discovery, list, or search
+- expose direct Bitwarden API access to the agent
+- support secret listing, search, or discovery
+- run as a daemon or remote service
+- act as a sandbox for untrusted child commands
 
-## Core Concepts
+## Data Model
 
-### Profile
-
-A profile defines how the CLI connects to Bitwarden.
-
-Examples:
-
-- `default`
-- `prod`
-- `staging`
-
-Each profile contains:
-
-- `apiUrl`
-- `identityUrl`
-- `credentialStore`
-
-### Policy
-
-Policy is a local allowlist that defines:
-
-- which aliases exist
-- which Bitwarden `secretId` each alias maps to
-- whether the alias can be used with `env` or `file`
-- which profiles may use that alias
-
-### Alias
-
-An alias is the only secret identifier the agent is allowed to use.
-
-Examples:
-
-- `github_token`
-- `prod_ssh_key`
-
-### Runtime Execution
-
-Runtime execution is the process of:
-
-1. loading config
-2. loading policy
-3. validating alias access
-4. fetching the secret from Bitwarden
-5. injecting the secret into a child process
-6. writing an audit record
-7. cleaning up temporary state
-
-## User File Layout
-
-Base directory:
-
-- `~/.config/bitwarden-agent-secrets/`
-- `~/.local/state/bitwarden-agent-secrets/`
-
-Files:
-
-- `config.json`
-- credential file fallback dir under `~/.config/bitwarden-agent-secrets/credentials/`
-- `policy.json`
-- `audit.log`
-- Bitwarden SDK state files under `~/.local/state/bitwarden-agent-secrets/bitwarden/`
-- runtime temp files under `~/.local/state/bitwarden-agent-secrets/tmp/`
-
-Permissions:
-
-- directory: `0700`
-- state directory: `0700`
-- `config.json`: `0600`
-- `policy.json`: `0600`
-- `audit.log`: `0600`
-
-## Config Specification
-
-### File: `config.json`
-
-Purpose:
-
-- stores profiles
-- stores default profile
-- does not store policy
-
-Example:
+### `config.json`
 
 ```json
 {
@@ -123,95 +45,74 @@ Example:
 
 Rules:
 
-- `version` is required
 - `defaultProfile` is required
 - `profiles` is required
-- `credentialStore` is required for each profile
-- `apiUrl` and `identityUrl` are optional for Bitwarden Cloud
-- `credentialStore.type` may be `keychain` or `file`
+- each profile must define `credentialStore`
+- `credentialStore.type` is `keychain` or `file`
+- `init` must not overwrite `defaultProfile` unless `--set-default` is passed or this is the first config
 
-Credential storage model:
-
-- `keychain` is preferred on macOS and Linux developer machines
-- macOS uses system Keychain via `security`
-- Linux uses Secret Service / GNOME Keyring via `secret-tool`
-- `file` is an explicit fallback backend
-- file backend stores the token in `~/.config/bitwarden-agent-secrets/credentials/<profile>.token`
-- file backend paths must be protected with `0600`
-- Bitwarden Secrets Manager operations use the official Node SDK with per-profile state files under `~/.local/state/bitwarden-agent-secrets/bitwarden/`
-
-## Policy Specification
-
-### File: `policy.json`
-
-Purpose:
-
-- defines allowed aliases
-- blocks arbitrary secret access
-
-Example:
+### `policy.json`
 
 ```json
 {
-  "version": 1,
-  "allowReveal": false,
+  "version": 2,
   "secrets": {
     "github_token": {
       "secretId": "382580ab-1368-4e85-bfa3-b02e01400c9f",
       "mode": "env",
       "envName": "GITHUB_TOKEN",
       "profiles": ["default"],
-      "requiresApproval": false
-    },
-    "prod_ssh_key": {
-      "secretId": "be8e0ad8-d545-4017-a55a-b02f014d4158",
-      "mode": "file",
-      "envName": "SSH_KEY_FILE",
-      "profiles": ["prod"],
-      "requiresApproval": true
+      "requiresApproval": false,
+      "allowedCommands": ["gh", "git"]
     }
   }
 }
 ```
 
-Secret object fields:
+Secret policy fields:
 
 - `secretId`: Bitwarden secret identifier
 - `mode`: `env` or `file`
 - `envName`: target environment variable name
-- `profiles`: list of profiles allowed to use this alias
-- `requiresApproval`: reserved for future approval flow
+- `profiles`: allowed profile names
+- `requiresApproval`: reserved metadata, not enforced yet
+- `allowedCommands`: optional basename allowlist for child commands
 
-Policy rules:
+Compatibility rule:
 
-- the CLI accepts alias names only
-- the CLI must not accept arbitrary `secretId` input for runtime fetch
-- list/search/discovery operations are not supported
-- alias usage must be rejected if profile is not allowed
+- legacy `version: 1` policies with `allowReveal` must still load
+- `allowReveal` is ignored
 
-Allowlist model:
+## File Layout
 
-- allowlist is defined locally in `policy.json`
-- allowlist is not auto-generated from all secrets visible to the Bitwarden token
-- secret values are fetched on demand only for requested aliases
-- `policy` commands may help edit `policy.json`, but they do not dump or cache all secrets
+- config dir: `~/.config/bitwarden-agent-secrets/`
+- state dir: `~/.local/state/bitwarden-agent-secrets/`
+- config: `~/.config/bitwarden-agent-secrets/config.json`
+- policy: `~/.config/bitwarden-agent-secrets/policy.json`
+- audit log: `~/.config/bitwarden-agent-secrets/audit.log`
+- file-backed credentials: `~/.config/bitwarden-agent-secrets/credentials/`
+- Bitwarden SDK state: `~/.local/state/bitwarden-agent-secrets/bitwarden/`
+- runtime temp files: `~/.local/state/bitwarden-agent-secrets/tmp/`
+
+Expected permissions:
+
+- config dir: `0700`
+- state dir: `0700`
+- config file: `0600`
+- policy file: `0600`
+- audit log: `0600`
+- file-backed credentials: `0600`
+- temp files: `0600`
 
 ## CLI Contract
 
-### `bitwarden-agent-secrets init`
+### `init`
 
 Purpose:
 
-- initialize local config
-- create or update a profile
+- create or update one profile
+- store the access token in the selected backend
 - create a policy template if missing
-
-Prompts:
-
-- profile name, default `default`
-- Bitwarden access token
-- optional `apiUrl`
-- optional `identityUrl`
 
 Flags:
 
@@ -220,372 +121,195 @@ Flags:
 - `--access-token-stdin`
 - `--api-url <url>`
 - `--identity-url <url>`
-- `--non-interactive`
+- `--set-default`
 
-Behavior:
-
-- create config directory if missing
-- store access token in the selected credential backend
-- write `config.json`
-- ensure correct permissions
-- create `policy.json` template if missing
-
-Exit codes:
-
-- `0` success
-- `1` runtime/config error
-- `2` validation error
-
-### `bitwarden-agent-secrets doctor`
+### `doctor`
 
 Purpose:
 
-- validate local configuration
-- validate Bitwarden connectivity
-- validate policy
-
-Checks:
-
-- `config.json` exists
-- `defaultProfile` exists
-- file permissions are correct
-- credential store reference is valid
-- access token can be loaded from the credential backend
-- Bitwarden API is reachable
-- `policy.json` is valid
-- all configured aliases reference accessible secrets
+- validate local state for one profile
+- validate Bitwarden authentication
+- validate secret fetchability for aliases allowed on that profile
 
 Flags:
 
 - `--profile <name>`
 - `--json`
-
-Exit codes:
-
-- `0` success
-- `1` one or more checks failed
-
-### `bitwarden-agent-secrets profile list`
-
-Purpose:
-
-- show configured profiles
-- show default profile
-
-### `bitwarden-agent-secrets profile use <name>`
-
-Purpose:
-
-- switch `defaultProfile`
-
-### `bitwarden-agent-secrets profile add <name>`
-
-Purpose:
-
-- add a new profile
-
-Behavior:
-
-- same credential capture flow as `init`
-- selected credential backend must be stored in `config.json`
-
-### `bitwarden-agent-secrets profile rotate-token <name>`
-
-Purpose:
-
-- rotate the access token for an existing profile
-- optionally migrate the profile to a different credential backend
-
-Behavior:
-
-- reads a new access token from stdin or environment
-- rewrites the credential in the selected backend
-- if backend changes, removes the old stored credential
-
-### `bitwarden-agent-secrets profile remove <name>`
-
-Purpose:
-
-- remove a profile
-
-Rules:
-
-- must reject removing the active default profile unless changed first
-- should remove the associated credential from the credential backend
-
-### `bitwarden-agent-secrets policy list`
-
-Purpose:
-
-- show configured aliases in the local allowlist
-
-### `bitwarden-agent-secrets policy add <alias> --secret-id <id> --mode <env|file> --env <ENV> --profile <name>`
-
-Purpose:
-
-- add or replace an alias in `policy.json`
-
-Rules:
-
-- alias names are local identifiers
-- `--secret-id` is required
-- `--mode` must be `env` or `file`
-- `--env` is required
-- at least one `--profile` is required
-- `--requires-approval` is optional
-
-### `bitwarden-agent-secrets policy remove <alias>`
-
-Purpose:
-
-- remove an alias from `policy.json`
-
-### `bitwarden-agent-secrets policy validate`
-
-Purpose:
-
-- validate schema and local consistency of `policy.json`
+- `--skip-secrets`
 
 Checks:
 
-- alias entries contain `secretId`
-- alias entries contain valid `mode`
-- alias entries contain `envName`
-- alias entries contain one or more `profiles`
+- config presence and mode
+- config dir mode
+- `defaultProfile` integrity
+- policy presence and mode
+- audit log mode if present
+- state dir mode if present
+- credential store readability
+- Bitwarden authentication
+- alias fetchability for matching aliases unless `--skip-secrets` is used
 
-### `bitwarden-agent-secrets exec --map <alias:ENV> -- <command...>`
+Behavior:
 
-Purpose:
-
-- fetch one or more secrets
-- inject them as environment variables into a child process
-
-Example:
-
-```bash
-bitwarden-agent-secrets exec --map github_token:GITHUB_TOKEN -- gh auth status
-```
-
-Rules:
-
-- multiple `--map` flags are allowed
-- optional `--profile <name>` selects a non-default profile
-- each alias must exist in policy
-- each alias must have `mode=env`
-- the selected profile must be allowed by policy
-- the child process receives the mapped environment variables only for that execution
-
-Exit codes:
-
-- child process exit code when command launches successfully
-- `64` usage error
-- `65` policy violation
-- `66` secret fetch error
-
-### `bitwarden-agent-secrets file --mount <alias:ENV> -- <command...>`
-
-Purpose:
-
-- fetch one or more secrets
-- write them to temporary files
-- inject temp file paths into a child process
-
-Example:
-
-```bash
-bitwarden-agent-secrets file --mount prod_ssh_key:SSH_KEY_FILE -- ssh -i "$SSH_KEY_FILE" user@host
-```
-
-Rules:
-
-- multiple `--mount` flags are allowed
-- optional `--profile <name>` selects a non-default profile
-- each alias must exist in policy
-- each alias must have `mode=file`
-- temporary files must be created with `0600`
-- temporary runtime directories must be created under `~/.local/state/bitwarden-agent-secrets/tmp/`
-- temporary runtime directories must be created with `0700`
-- temporary files must be removed after execution
-
-### `bitwarden-agent-secrets reveal <alias>`
-
-Purpose:
-
-- print a secret directly to stdout
-
-Status:
-
-- optional
-- considered unsafe
-- should be disabled by default
-
-Rules:
-
-- only allowed if `allowReveal=true`
-- should require an explicit `--unsafe` flag in implementation
-
-### `bitwarden-agent-secrets audit tail`
-
-Purpose:
-
-- read local audit records
-
-## Runtime Behavior
+- text mode prints a human-readable report and exits non-zero on failed error-level checks
+- `--json` prints a machine-readable report and sets a non-zero exit code on failed error-level checks
 
 ### `exec`
 
-Execution flow:
+Form:
 
-1. load `config.json`
-2. select the active profile
-3. load `policy.json`
-4. validate aliases
-5. fetch secret values from Bitwarden
-6. construct child process environment
-7. run command
-8. write audit record
-9. exit with child process exit code
+```bash
+bitwarden-agent-secrets exec [--profile <name>] --map <alias:ENV> -- <command...>
+```
+
+Rules:
+
+- each alias must exist
+- each alias must have `mode=env`
+- selected profile must be allowed by the alias
+- if `allowedCommands` is configured, `basename(argv[0])` must match
+- secret values are injected only into the child process environment
 
 ### `file`
 
-Execution flow:
+Form:
 
-1. load `config.json`
-2. select the active profile
-3. load `policy.json`
-4. validate aliases
-5. fetch secret values from Bitwarden
-6. create temporary files with `0600` inside a user-private runtime directory
-7. inject file paths into child process environment
-8. run command
-9. remove temporary files
-10. write audit record
+```bash
+bitwarden-agent-secrets file [--profile <name>] --mount <alias:ENV> -- <command...>
+```
 
-## Audit Logging
+Rules:
 
-Audit file:
+- each alias must exist
+- each alias must have `mode=file`
+- selected profile must be allowed by the alias
+- if `allowedCommands` is configured, `basename(argv[0])` must match
+- temp files are created inside the user-private runtime directory
+- cleanup runs in `finally`
 
-- `~/.config/bitwarden-agent-secrets/audit.log`
+Shell expansion caveat:
 
-Format:
+```bash
+bitwarden-agent-secrets file --mount prod_ssh_key:SSH_KEY_FILE -- sh -c 'ssh -i "$SSH_KEY_FILE" user@host'
+```
 
-- JSON Lines
+Without the nested `sh -c`, your current shell expands `"$SSH_KEY_FILE"` before the broker starts.
+
+### `policy add`
+
+Form:
+
+```bash
+bitwarden-agent-secrets policy add <alias> \
+  --secret-id <id> \
+  --mode <env|file> \
+  --env <ENV> \
+  --profile <name> \
+  [--profile <name> ...] \
+  [--allowed-command <name> ...] \
+  [--requires-approval]
+```
+
+Rules:
+
+- `--profile` is repeatable and required at least once
+- `--allowed-command` is repeatable and optional
+- dangerous interpreters such as `sh`, `bash`, `python`, or `node` must emit a warning
+
+### `policy list`
+
+Purpose:
+
+- print aliases and their runtime constraints
+
+Output includes:
+
+- alias
+- mode
+- env name
+- profiles
+- secret id
+- allowed commands when configured
+
+### `policy validate`
+
+Checks:
+
+- `secretId` present
+- valid `mode`
+- `envName` present
+- one or more `profiles`
+- `allowedCommands`, if present, must be a non-empty string array
+
+### `audit tail`
+
+Purpose:
+
+- print local audit records
+
+### Removed Command
+
+`reveal` is not part of the CLI contract. Direct secret printing is intentionally unsupported.
+
+## Runtime Behavior
+
+For `exec` and `file`:
+
+1. parse runtime arguments
+2. load config and policy
+3. resolve active profile
+4. validate alias existence, mode, profile access, and `allowedCommands`
+5. fetch the secret from Bitwarden
+6. inject secret values into the child process
+7. run the child command without a shell wrapper in the broker itself
+8. write an audit record for success and failure paths
+9. clean up temporary files for `file`
+
+## Audit Contract
+
+Audit records are JSON Lines in `audit.log`.
 
 Example:
 
 ```json
-{"ts":"2026-04-17T12:30:00Z","profile":"default","alias":"github_token","mode":"env","command":"gh auth status","result":"success","exitCode":0}
-{"ts":"2026-04-17T12:31:10Z","profile":"prod","alias":"prod_ssh_key","mode":"file","command":"ssh -i $SSH_KEY_FILE user@host","result":"failure","exitCode":255}
+{"ts":"2026-04-20T10:20:00Z","profile":"default","alias":"github_token","aliases":["github_token"],"mode":"env","command":"gh auth status","result":"success","exitCode":0,"allowedCommand":"pass"}
+{"ts":"2026-04-20T10:21:00Z","profile":"default","alias":"github_token","aliases":["github_token"],"mode":"env","command":"curl https://example.com","result":"policy_violation","exitCode":65,"errorKind":"CliError","allowedCommand":"fail"}
 ```
+
+Fields:
+
+- `ts`
+- `profile`
+- `alias`: backward-compatible comma-joined alias string
+- `aliases`: explicit alias array
+- `mode`
+- `command`
+- `result`: `success`, `failure`, `policy_violation`, or `fetch_error`
+- `exitCode`
+- `errorKind` when available
+- `allowedCommand`: `pass`, `fail`, or `unrestricted`
 
 Must not log:
 
 - secret values
-- access tokens
-- full environment values
+- Bitwarden access tokens
+- full environment contents
 - temp file contents
-- temp file paths unless explicitly needed for local debug output
 
-## Security Requirements
+## Exit Codes
 
-Required for MVP:
+- `0`: success
+- `1`: runtime/config error or failed error-level `doctor` checks
+- `2`: validation error
+- `64`: CLI usage error
+- `65`: policy violation
+- child exit code for launched `exec` or `file` commands
+- `128 + signal` for child processes terminated by signal
 
-- alias-based access only
-- no list/search/discovery commands
-- no arbitrary secret id input in runtime commands
-- hidden token capture in interactive init flow
-- `0600` enforcement for sensitive files
-- `0600` enforcement for file credential backend
-- `0600` enforcement for temporary secret files
-- cleanup in `finally`-style execution paths where possible
-- no secret values in normal logs or error messages
+## Security Notes
 
-## Known MVP Limitations
+- `allowedCommands` is a hardening layer, not a sandbox
+- once a secret is injected into a child process, that child controls the secret
+- `requiresApproval` remains metadata until a real approval flow exists
 
-- `keychain` depends on platform-native tools being installed and usable
-- environment variable injection is not secure against every local inspection path
-- child process output may still expose secrets if the child prints them
-- `requiresApproval` is metadata only
-- `file` backend still stores the token in plain text, protected only by filesystem permissions
-- cleanup is best-effort and does not guarantee secure wipe semantics on every filesystem
-
-## Suggested Node.js Project Layout
-
-```text
-bitwarden-agent-secrets/
-  package.json
-  tsconfig.json
-  README.md
-  SPEC.md
-  src/
-    cli.ts
-    commands/
-      init.ts
-      doctor.ts
-      exec.ts
-      file.ts
-      policy-add.ts
-      policy-list.ts
-      policy-remove.ts
-      policy-validate.ts
-      reveal.ts
-      profile-list.ts
-      profile-add.ts
-      profile-use.ts
-      profile-remove.ts
-      audit-tail.ts
-    config/
-      paths.ts
-      load-config.ts
-      save-config.ts
-      load-policy.ts
-    bitwarden/
-      client.ts
-      auth.ts
-      secrets.ts
-    runtime/
-      run-env.ts
-      run-file.ts
-      temp-file.ts
-    audit/
-      logger.ts
-    security/
-      permissions.ts
-      redact.ts
-    schemas/
-      config-schema.ts
-      policy-schema.ts
-    errors/
-      cli-error.ts
-```
-
-## MVP User Flows
-
-### First-time setup
-
-```bash
-bitwarden-agent-secrets init
-bitwarden-agent-secrets doctor
-```
-
-### Run a command with an API token
-
-```bash
-bitwarden-agent-secrets exec --map github_token:GITHUB_TOKEN -- gh auth status
-```
-
-### Run a command with a temporary SSH key file
-
-```bash
-bitwarden-agent-secrets file --mount prod_ssh_key:SSH_KEY_FILE -- ssh -i "$SSH_KEY_FILE" user@host
-```
-
-## Post-MVP
-
-- better interactive fallback behavior when secure credential storage is unavailable
-- approval flow for `requiresApproval`
-- output masking
-- shell completions
-- policy import/export helpers
-- stricter command-level policy controls
-- profile override flags on all runtime commands
+Full threat model: [SECURITY.md](./SECURITY.md)

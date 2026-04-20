@@ -2,7 +2,21 @@ import { loadPolicy } from "../config/load-policy.js";
 import { savePolicy } from "../config/save-policy.js";
 import { CliError } from "../errors/cli-error.js";
 import type { SecretMode } from "../schemas/policy-schema.js";
-import { writeStdout } from "../utils/io.js";
+import { writeStderr, writeStdout } from "../utils/io.js";
+import { readFlagValue, readRepeatedFlagValues } from "../utils/args.js";
+
+const DANGEROUS_ALLOWED_COMMANDS = new Set([
+  "sh",
+  "bash",
+  "zsh",
+  "fish",
+  "python",
+  "python3",
+  "node",
+  "ruby",
+  "perl",
+  "env",
+]);
 
 export async function runPolicyAdd(args: string[]): Promise<void> {
   const alias = args[0];
@@ -17,6 +31,7 @@ export async function runPolicyAdd(args: string[]): Promise<void> {
   const mode = readFlagValue(args, "--mode") as SecretMode | undefined;
   const envName = readFlagValue(args, "--env");
   const profiles = readRepeatedFlagValues(args, "--profile");
+  const allowedCommands = readRepeatedFlagValues(args, "--allowed-command");
 
   if (!secretId || !mode || !envName || profiles.length === 0) {
     throw new CliError(
@@ -35,26 +50,17 @@ export async function runPolicyAdd(args: string[]): Promise<void> {
     envName,
     profiles,
     requiresApproval: args.includes("--requires-approval"),
+    ...(allowedCommands.length > 0 ? { allowedCommands } : {}),
   };
   await savePolicy(policy);
-  await writeStdout(`Added policy alias ${alias}.\n`);
-}
 
-function readFlagValue(args: string[], flagName: string): string | undefined {
-  const index = args.indexOf(flagName);
-  if (index === -1) {
-    return undefined;
-  }
-  return args[index + 1];
-}
-
-function readRepeatedFlagValues(args: string[], flagName: string): string[] {
-  const values: string[] = [];
-  for (let index = 0; index < args.length; index += 1) {
-    if (args[index] === flagName && args[index + 1]) {
-      values.push(args[index + 1]);
-      index += 1;
+  for (const command of allowedCommands) {
+    if (DANGEROUS_ALLOWED_COMMANDS.has(command)) {
+      await writeStderr(
+        `Warning: allowed command '${command}' effectively allows arbitrary execution.\n`,
+      );
     }
   }
-  return values;
+
+  await writeStdout(`Added policy alias ${alias}.\n`);
 }

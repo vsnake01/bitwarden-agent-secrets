@@ -7,10 +7,13 @@ export interface AuditRecord {
   ts: string;
   profile: string;
   alias: string;
+  aliases: string[];
   mode: "env" | "file";
   command: string;
-  result: "success" | "failure";
+  result: "success" | "failure" | "policy_violation" | "fetch_error";
   exitCode: number;
+  errorKind?: string;
+  allowedCommand?: "pass" | "fail" | "unrestricted";
 }
 
 export async function writeAuditRecord(record: AuditRecord): Promise<void> {

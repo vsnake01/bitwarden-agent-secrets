@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import os from "node:os";
 
 export async function runCommand(
   command: string[],
@@ -18,7 +19,8 @@ export async function runCommand(
     child.on("error", reject);
     child.on("exit", (code, signal) => {
       if (signal) {
-        resolve(1);
+        const signalNumber = os.constants.signals[signal] ?? 0;
+        resolve(128 + signalNumber);
         return;
       }
 
