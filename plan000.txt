@@ -1,0 +1,48 @@
+  Финальный план доработок до «взрослого» продукта                                                                                                                                                                 
+                                                                                                                                                                                                                   
+  Фаза 1. Исправить «детские болячки» (1–2 дня)                    
+                                                                                                                                                                                                                   
+  1. Починить сломанный пример с SSH в README + SPEC — переписать через sh -c или заменить на aws --profile … s3 cp где путь берётся из env самой тулзой.                                                          
+  2. Синхронизировать лицензию — убрать «License TBD» из README.                                                                                                                                                   
+  3. Устранить дубликат readFlagValue в policy-add.ts, вынести readRepeatedFlagValues в utils/args.ts.                                                                                                             
+  4. Аудит на failure-path — обернуть exec.ts и file.ts в try/finally с записью audit-record на все исходы (policy violation, fetch error, signal).                                                                
+  5. Exit code 128 + signal в run-command.ts — конвенция Unix.                                                                                                                                                     
+  6. init не должен трогать defaultProfile, если конфиг уже существует — добавить флаг --set-default.                                                                                                              
+  7. Удалить или документировать reveal — либо реализовать с --unsafe, либо убрать команду целиком из MVP (лучше второе — риск >> польза).                                                                         
+                                                                                                                                                                                                                   
+  Фаза 2. Честный doctor и threat model (2–3 дня)                                                                                                                                                                  
+                                                                                                                                                                                                                   
+  8. doctor должен делать то, что обещает SPEC:                                                                                                                                                                    
+    - stat + проверка mode == 0o600 для config/policy/audit/credential files
+    - Для каждого alias в policy: попытка client.secrets().get(secretId) с агрегированным репортом (без вывода значений)                                                                                           
+    - Флаг --json для машиночитаемого вывода (нужен в CI)                                                                                                                                                          
+    - Проверка, что defaultProfile существует в profiles                                                                                                                                                           
+  9. Добавить SECURITY.md с явной threat model:                                                                                                                                                                    
+    - Защищаем от: расширения scope агентом, случайной утечки токена в git, прямого доступа агента к Bitwarden API                                                                                                 
+    - НЕ защищаем от: зловредной команды, которая сама сливает выданный секрет; локального pid/env inspection от того же юзера; memory dumps                                                                       
+    - Рекомендация: для недоверенных агентов — запускать в sandbox (bubblewrap/firejail/контейнер) поверх брокера                                                                                                  
+                                                                                                                                                                                                                   
+  Фаза 3. Реальные security-контроли (неделя)                                                                                                                                                                      
+                                                                                                                                                                                                                   
+  10. Реализовать requiresApproval — интерактивный TTY-prompt при запуске exec/file с этим флагом. Для --non-interactive режима — отказ. Опционально: кэш approval на N минут.                                     
+  11. Command allowlist per alias — поле allowedCommands: string[] в policy, где матчится argv[0] (basename). Например, github_token разрешён только для gh и git. Это закрывает класс атак «слил токен через
+  curl».                                                                                                                                                                                                           
+  12. TTL/rate-limit на alias — maxUsesPerHour, cooldownSeconds. Сохранять в state-файле.
+  13. Редакция secret-значений в stderr дочернего процесса — опционально, через pipe-wrapping. Сложно сделать полностью, но можно блокировать попадание значения в audit.log даже случайно.                        
+                                                                                                                                                                                                                   
+  Фаза 4. Production-readiness (неделя)                                                                                                                                                                            
+                                                                                                                                                                                                                   
+  14. CI (.github/workflows/ci.yml): build + test + lint на Node 20/22, Linux/macOS. Публикация npm-пакета по тегам.                                                                                               
+  15. Release process: semver-теги, CHANGELOG.md (Keep a Changelog), npm publish с --provenance.
+  16. Пинить SDK: @bitwarden/sdk-napi: "1.x.y" без ^, обновлять осознанно — это native-модуль.                                                                                                                     
+  17. E2E тесты против реального Bitwarden SM (опционально, с отдельным тестовым tenant + secrets в CI через OIDC).                                                                                                
+  18. Man-page / --help для каждой подкоманды (не только общий).                                                                                                                                                   
+  19. Shell completions (bash/zsh/fish) — есть в post-MVP, перенести в MVP — это copy-paste работа.                                                                                                                
+  20. Telemetry opt-out — если будут собираться метрики использования, явный opt-in.                                                                                                                               
+                                                                                                                                                                                                                   
+  Фаза 5. Distribution                                                                                                                                                                                             
+                                                                                                                                                                                                                   
+  21. Single-file binary через pkg/bun build --compile/Node SEA — чтобы не требовать npm install -g и @bitwarden/sdk-napi build-step у пользователя.                                                               
+  22. Homebrew formula + apt/rpm для Linux.                        
+  23. Docker-образ для CI-использования.                                                                                                                                                                           
+ 

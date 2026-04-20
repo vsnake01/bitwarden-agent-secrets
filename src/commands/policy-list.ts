@@ -12,7 +12,11 @@ export async function runPolicyList(_args: string[]): Promise<void> {
 
   const lines = aliases.map(([alias, secret]) => {
     const profiles = secret.profiles.join(",");
-    return `${alias}  mode=${secret.mode} env=${secret.envName} profiles=${profiles} secretId=${secret.secretId}`;
+    const allowedCommands =
+      secret.allowedCommands && secret.allowedCommands.length > 0
+        ? ` allowed=${secret.allowedCommands.join(",")}`
+        : "";
+    return `${alias}  mode=${secret.mode} env=${secret.envName} profiles=${profiles} secretId=${secret.secretId}${allowedCommands}`;
   });
   await writeStdout(`${lines.join("\n")}\n`);
 }

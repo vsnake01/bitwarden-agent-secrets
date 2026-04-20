@@ -14,7 +14,6 @@ import { runProfileList } from "./commands/profile-list.js";
 import { runProfileRemove } from "./commands/profile-remove.js";
 import { runProfileRotateToken } from "./commands/profile-rotate-token.js";
 import { runProfileUse } from "./commands/profile-use.js";
-import { runReveal } from "./commands/reveal.js";
 import { CliError, formatError } from "./errors/cli-error.js";
 import { writeStderr, writeStdout } from "./utils/io.js";
 
@@ -40,9 +39,6 @@ async function main(): Promise<void> {
         return;
       case "file":
         await runFile(args.slice(1));
-        return;
-      case "reveal":
-        await runReveal(args.slice(1));
         return;
       case "audit":
         if (subcommand === "tail") {
@@ -118,11 +114,10 @@ async function printHelp(): Promise<void> {
     "bitwarden-agent-secrets",
     "",
     "Usage:",
-    "  bitwarden-agent-secrets init [--credential-store keychain|file]",
-    "  bitwarden-agent-secrets doctor [--profile <name>]",
+    "  bitwarden-agent-secrets init [--credential-store keychain|file] [--profile <name>] [--set-default]",
+    "  bitwarden-agent-secrets doctor [--profile <name>] [--json] [--skip-secrets]",
     "  bitwarden-agent-secrets exec [--profile <name>] --map <alias:ENV> -- <command...>",
     "  bitwarden-agent-secrets file [--profile <name>] --mount <alias:ENV> -- <command...>",
-    "  bitwarden-agent-secrets reveal <alias>",
     "  bitwarden-agent-secrets audit tail",
     "  bitwarden-agent-secrets profile list",
     "  bitwarden-agent-secrets profile add <name> [--credential-store keychain|file]",
@@ -130,7 +125,7 @@ async function printHelp(): Promise<void> {
     "  bitwarden-agent-secrets profile use <name>",
     "  bitwarden-agent-secrets profile remove <name>",
     "  bitwarden-agent-secrets policy list",
-    "  bitwarden-agent-secrets policy add <alias> --secret-id <id> --mode <env|file> --env <ENV> --profile <name>",
+    "  bitwarden-agent-secrets policy add <alias> --secret-id <id> --mode <env|file> --env <ENV> --profile <name> [--allowed-command <name>]",
     "  bitwarden-agent-secrets policy remove <alias>",
     "  bitwarden-agent-secrets policy validate",
   ];

@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { stat } from "node:fs/promises";
 
 import { parseRuntimeArgs } from "../dist/runtime/parse-runtime-args.js";
+import { runCommand } from "../dist/runtime/run-command.js";
 import { createSecretFile } from "../dist/runtime/temp-file.js";
 
 import { cleanupTempHome, makeTempHome } from "./helpers.js";
@@ -53,3 +54,12 @@ test(
   }
   },
 );
+
+test("runCommand returns 128 plus signal number for signaled exits", { concurrency: false }, async () => {
+  const exitCode = await runCommand(
+    [process.execPath, "-e", "process.kill(process.pid, 'SIGTERM')"],
+    {},
+  );
+
+  assert.equal(exitCode, 143);
+});

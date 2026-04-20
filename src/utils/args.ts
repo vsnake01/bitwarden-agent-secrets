@@ -7,6 +7,19 @@ export function readFlagValue(args: string[], flagName: string): string | undefi
   return args[index + 1];
 }
 
+export function readRepeatedFlagValues(args: string[], flagName: string): string[] {
+  const values: string[] = [];
+
+  for (let index = 0; index < args.length; index += 1) {
+    if (args[index] === flagName && args[index + 1]) {
+      values.push(args[index + 1]);
+      index += 1;
+    }
+  }
+
+  return values;
+}
+
 export function stripFlagWithValue(args: string[], flagName: string): string[] {
   const stripped: string[] = [];
 

@@ -6,10 +6,10 @@ export interface SecretPolicy {
   envName: string;
   profiles: string[];
   requiresApproval: boolean;
+  allowedCommands?: string[];
 }
 
 export interface PolicyFile {
   version: number;
-  allowReveal: boolean;
   secrets: Record<string, SecretPolicy>;
 }

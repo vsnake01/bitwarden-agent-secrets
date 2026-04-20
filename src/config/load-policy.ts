@@ -7,7 +7,7 @@ import { getPolicyPath } from "./paths.js";
 export async function loadPolicy(): Promise<PolicyFile> {
   try {
     const raw = await readFile(getPolicyPath(), "utf8");
-    const policy = JSON.parse(raw) as PolicyFile;
+    const policy = normalizePolicy(JSON.parse(raw) as PolicyFile & { allowReveal?: boolean });
     validatePolicy(policy);
     return policy;
   } catch (error) {
@@ -16,6 +16,13 @@ export async function loadPolicy(): Promise<PolicyFile> {
     }
     throw new CliError(1, `Failed to load policy from ${getPolicyPath()}.`);
   }
+}
+
+function normalizePolicy(policy: PolicyFile & { allowReveal?: boolean }): PolicyFile {
+  return {
+    version: policy.version ?? 1,
+    secrets: policy.secrets ?? {},
+  };
 }
 
 function validatePolicy(policy: PolicyFile): void {
@@ -42,6 +49,14 @@ export function assertValidPolicy(policy: PolicyFile): void {
     }
     if (!Array.isArray(secret.profiles) || secret.profiles.length === 0) {
       throw new CliError(2, `Policy alias ${alias} must define at least one profile.`);
+    }
+    if (secret.allowedCommands !== undefined) {
+      if (!Array.isArray(secret.allowedCommands)) {
+        throw new CliError(2, `Policy alias ${alias} has invalid allowedCommands.`);
+      }
+      if (secret.allowedCommands.some((command) => typeof command !== "string" || !command.trim())) {
+        throw new CliError(2, `Policy alias ${alias} has invalid allowedCommands.`);
+      }
     }
   }
 }
