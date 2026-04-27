@@ -1,3 +1,5 @@
+import { promptAccessToken } from "./prompts.js";
+
 export function readFlagValue(args: string[], flagName: string): string | undefined {
   const index = args.indexOf(flagName);
   if (index === -1) {
@@ -40,7 +42,15 @@ export async function readTokenFromArgsOrEnv(args: string[]): Promise<string | u
     return readStdin();
   }
 
-  return process.env.BWS_ACCESS_TOKEN;
+  if (process.env.BWS_ACCESS_TOKEN) {
+    return process.env.BWS_ACCESS_TOKEN;
+  }
+
+  if (args.includes("--access-token-prompt") || args.includes("--interactive") || process.stdin.isTTY) {
+    return promptAccessToken();
+  }
+
+  return undefined;
 }
 
 async function readStdin(): Promise<string> {

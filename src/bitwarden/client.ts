@@ -7,10 +7,16 @@ import {
   getBitwardenStatePath,
 } from "../config/paths.js";
 import type { ResolvedProfileConfig } from "../schemas/config-schema.js";
+import { CliError } from "../errors/cli-error.js";
 import { chmodSafe } from "../security/permissions.js";
 
 type SdkModule = typeof import("@bitwarden/sdk-napi");
 type SdkClientInstance = InstanceType<SdkModule["BitwardenClient"]>;
+
+export interface BitwardenSecretMetadata {
+  id: string;
+  name: string;
+}
 
 let loadSdkModule: () => Promise<SdkModule> = () => import("@bitwarden/sdk-napi");
 
@@ -49,6 +55,30 @@ export class BitwardenClient {
     }
   }
 
+  async listSecrets(): Promise<BitwardenSecretMetadata[]> {
+    if (!this.profile.organizationId) {
+      throw new CliError(
+        2,
+        `Profile ${this.profileName} is missing organizationId. Run init with --organization-id <id> or pass --organization-id to policy setup.`,
+      );
+    }
+
+    try {
+      const client = await this.getAuthenticatedClient();
+      const secretsApi = client.secrets() as unknown as {
+        list: (organizationId: string) => Promise<unknown>;
+      };
+      const response = await secretsApi.list(this.profile.organizationId);
+      const secrets = normalizeSecretListResponse(response);
+      return secrets.map(normalizeSecretMetadata);
+    } catch (error) {
+      throw mapBitwardenError(
+        error,
+        `Failed to list Bitwarden secrets for profile ${this.profileName}.`,
+      );
+    }
+  }
+
   private async getAuthenticatedClient(): Promise<SdkClientInstance> {
     if (!this.sdkClientPromise) {
       this.sdkClientPromise = this.authenticate();
@@ -83,6 +113,37 @@ export class BitwardenClient {
 
     return client;
   }
+}
+
+function normalizeSecretListResponse(response: unknown): unknown[] {
+  if (Array.isArray(response)) {
+    return response;
+  }
+
+  const record = response && typeof response === "object" ? response as Record<string, unknown> : {};
+  if (Array.isArray(record.data)) {
+    return record.data;
+  }
+
+  throw new Error("Bitwarden secret metadata response is not a list.");
+}
+
+function normalizeSecretMetadata(secret: unknown): BitwardenSecretMetadata {
+  const record = secret && typeof secret === "object" ? secret as Record<string, unknown> : {};
+  const id = record.id;
+  const name = record.key ?? record.name;
+
+  if (typeof id !== "string" || !id.trim()) {
+    throw new Error("Bitwarden secret metadata is missing id.");
+  }
+  if (typeof name !== "string" || !name.trim()) {
+    throw new Error(`Bitwarden secret metadata ${id} is missing name.`);
+  }
+
+  return {
+    id,
+    name,
+  };
 }
 
 function mapBitwardenError(error: unknown, fallbackMessage: string): Error {

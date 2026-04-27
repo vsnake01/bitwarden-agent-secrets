@@ -30,6 +30,7 @@ export async function runInit(args: string[]): Promise<void> {
 
   const apiUrl = readFlagValue(args, "--api-url") ?? CLOUD_API_URL;
   const identityUrl = readFlagValue(args, "--identity-url") ?? CLOUD_IDENTITY_URL;
+  const organizationId = readFlagValue(args, "--organization-id");
   const credentialStore = buildCredentialStoreRef(profileName, credentialStoreType);
 
   await saveAccessToken(credentialStore, accessToken);
@@ -45,6 +46,7 @@ export async function runInit(args: string[]): Promise<void> {
         ...(existingConfig?.profiles[profileName] ?? {}),
         apiUrl,
         identityUrl,
+        ...(organizationId ? { organizationId } : {}),
         credentialStore,
       },
     },

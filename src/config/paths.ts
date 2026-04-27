@@ -37,6 +37,14 @@ export function getPolicyPath(): string {
   return path.join(getConfigDir(), "policy.json");
 }
 
+export function getPolicySourceDir(): string {
+  return path.join(getConfigDir(), "policy.sources");
+}
+
+export function getPolicySourcePath(profileName: string): string {
+  return path.join(getPolicySourceDir(), `${profileName}.json`);
+}
+
 export function getAuditLogPath(): string {
   return path.join(getConfigDir(), "audit.log");
 }
