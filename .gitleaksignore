@@ -1,0 +1,6 @@
+# False-positive documentation examples from the initial public README/SPEC.
+# They are not real Bitwarden secrets; they were UUID-shaped sample secret IDs.
+65fecf3c7047ee94e3e692c637e75546111ebcd4:README.md:generic-api-key:146
+65fecf3c7047ee94e3e692c637e75546111ebcd4:README.md:generic-api-key:153
+65fecf3c7047ee94e3e692c637e75546111ebcd4:SPEC.md:generic-api-key:145
+65fecf3c7047ee94e3e692c637e75546111ebcd4:SPEC.md:generic-api-key:152

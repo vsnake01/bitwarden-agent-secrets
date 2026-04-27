@@ -13,11 +13,12 @@ The tool:
 - fetches secrets from Bitwarden Secrets Manager on demand
 - injects secret values into one child process through environment variables or temporary files
 - writes local audit records without storing secret values
+- can build local policy from Bitwarden secret metadata without reading secret values
 
 The tool does not:
 
 - expose direct Bitwarden API access to the agent
-- support secret listing, search, or discovery
+- support secret value listing, search, or discovery at runtime
 - run as a daemon or remote service
 - act as a sandbox for untrusted child commands
 
@@ -31,9 +32,10 @@ The tool does not:
   "defaultProfile": "default",
   "profiles": {
     "default": {
-      "apiUrl": "https://api.bitwarden.com",
-      "identityUrl": "https://identity.bitwarden.com",
-      "credentialStore": {
+        "apiUrl": "https://api.bitwarden.com",
+        "identityUrl": "https://identity.bitwarden.com",
+        "organizationId": "bitwarden-organization-id",
+        "credentialStore": {
         "type": "keychain",
         "service": "bitwarden-agent-secrets",
         "account": "default"
@@ -49,6 +51,7 @@ Rules:
 - `profiles` is required
 - each profile must define `credentialStore`
 - `credentialStore.type` is `keychain` or `file`
+- `organizationId` is optional for runtime secret fetches but required for metadata listing in `policy setup`
 - `init` must not overwrite `defaultProfile` unless `--set-default` is passed or this is the first config
 
 ### `policy.json`
@@ -58,7 +61,7 @@ Rules:
   "version": 2,
   "secrets": {
     "github_token": {
-      "secretId": "382580ab-1368-4e85-bfa3-b02e01400c9f",
+      "secretId": "bw-secret-id-github-token",
       "mode": "env",
       "envName": "GITHUB_TOKEN",
       "profiles": ["default"],
@@ -119,9 +122,18 @@ Flags:
 - `--profile <name>`
 - `--credential-store <keychain|file>`
 - `--access-token-stdin`
+- `--access-token-prompt`
+- `--organization-id <id>`
 - `--api-url <url>`
 - `--identity-url <url>`
 - `--set-default`
+
+Behavior:
+
+- if no token is provided through stdin or `BWS_ACCESS_TOKEN` and the command is running in a terminal, prompt for the token without echoing input
+- `--access-token-prompt` forces the hidden prompt path
+- non-interactive automation should use `--access-token-stdin`
+- `--organization-id` should be stored for profiles that will use `policy setup`
 
 ### `doctor`
 
@@ -240,6 +252,54 @@ Checks:
 - `envName` present
 - one or more `profiles`
 - `allowedCommands`, if present, must be a non-empty string array
+
+### `policy setup`
+
+Purpose:
+
+- build or update local policy from Bitwarden secret names
+- support repeated runs by loading the current source policy and compiled policy
+- show a human-readable change plan before writing
+- resolve Bitwarden secret names to IDs using metadata only
+
+Form:
+
+```bash
+bitwarden-agent-secrets policy setup \
+  [--profile <name>] \
+  [--organization-id <id>] \
+  [--interactive] \
+  [--select <BitwardenName,...>] \
+  [--allow <alias:cmd,cmd>] \
+  [--dry-run|--apply --yes]
+```
+
+Rules:
+
+- `--select` represents the desired exposed Bitwarden secret names for the profile
+- `--interactive` opens a terminal UI with checkboxes for secrets and allowed commands
+- if interactive mode needs Bitwarden metadata and no `organizationId` is available, it asks for the Bitwarden organization id
+- interactive mode asks `Apply this policy? [y/N]` after rendering the plan unless `--dry-run` is passed
+- `--organization-id` overrides the profile organization for this run
+- if neither profile nor command defines `organizationId`, setup fails before listing Bitwarden metadata
+- selected names are converted to aliases, for example `GITHUB_TOKEN` -> `github_token`
+- `--allow` sets allowed child commands for an alias
+- command values are normalized to basenames and de-duplicated
+- `--dry-run` prints the plan without writing files
+- `--apply --yes` writes the source policy and compiled policy in non-interactive automation
+- setup must not fetch secret values
+
+Source file:
+
+```text
+~/.config/bitwarden-agent-secrets/policy.sources/<profile>.json
+```
+
+Compiled file:
+
+```text
+~/.config/bitwarden-agent-secrets/policy.json
+```
 
 ### `audit tail`
 

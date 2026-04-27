@@ -45,5 +45,8 @@ function validateConfig(config: ConfigFile): void {
     if (profile.credentialStore.type === "file" && !profile.credentialStore.path) {
       throw new CliError(2, `Profile ${profileName} has invalid file credentialStore.`);
     }
+    if (profile.organizationId !== undefined && !profile.organizationId.trim()) {
+      throw new CliError(2, `Profile ${profileName} has invalid organizationId.`);
+    }
   }
 }

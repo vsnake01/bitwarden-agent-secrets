@@ -26,6 +26,7 @@ export async function runProfileAdd(args: string[]): Promise<void> {
   const credentialStoreType =
     (readFlagValue(args, "--credential-store") as CredentialStoreType | undefined) ??
     getDefaultCredentialStoreType();
+  const organizationId = readFlagValue(args, "--organization-id");
   const credentialStore = buildCredentialStoreRef(name, credentialStoreType);
 
   const config = await loadConfig();
@@ -36,6 +37,7 @@ export async function runProfileAdd(args: string[]): Promise<void> {
   config.profiles[name] = {
     apiUrl: "https://api.bitwarden.com",
     identityUrl: "https://identity.bitwarden.com",
+    ...(organizationId ? { organizationId } : {}),
     credentialStore,
   };
   await saveConfig(config);

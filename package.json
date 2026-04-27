@@ -13,9 +13,11 @@
     "url": "git+https://github.com/vsnake01/bitwarden-agent-secrets.git"
   },
   "bin": {
-    "bitwarden-agent-secrets": "./dist/cli.js"
+    "bitwarden-agent-secrets": "./dist/cli.js",
+    "bas": "./dist/cli.js"
   },
   "files": [
+    ".agents/skills/bitwarden-agent-secrets/SKILL.md",
     "dist",
     "README.md",
     "SPEC.md"

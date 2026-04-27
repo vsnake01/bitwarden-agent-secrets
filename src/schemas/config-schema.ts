@@ -16,6 +16,7 @@ export type CredentialStoreRef = KeychainCredentialStore | FileCredentialStore;
 export interface ProfileConfig {
   apiUrl?: string;
   identityUrl?: string;
+  organizationId?: string;
   credentialStore: CredentialStoreRef;
 }
 

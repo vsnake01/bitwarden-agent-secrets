@@ -8,6 +8,7 @@ import { runInit } from "./commands/init.js";
 import { runPolicyAdd } from "./commands/policy-add.js";
 import { runPolicyList } from "./commands/policy-list.js";
 import { runPolicyRemove } from "./commands/policy-remove.js";
+import { runPolicySetup } from "./commands/policy-setup.js";
 import { runPolicyValidate } from "./commands/policy-validate.js";
 import { runProfileAdd } from "./commands/profile-add.js";
 import { runProfileList } from "./commands/profile-list.js";
@@ -101,11 +102,14 @@ async function runPolicyCommand(
     case "remove":
       await runPolicyRemove(args);
       return;
+    case "setup":
+      await runPolicySetup(args);
+      return;
     case "validate":
       await runPolicyValidate(args);
       return;
     default:
-      throw new CliError(64, "Supported policy commands: list, add, remove, validate.");
+      throw new CliError(64, "Supported policy commands: list, add, remove, setup, validate.");
   }
 }
 
@@ -114,23 +118,24 @@ async function printHelp(): Promise<void> {
     "bitwarden-agent-secrets",
     "",
     "Usage:",
-    "  bitwarden-agent-secrets init [--credential-store keychain|file] [--profile <name>] [--set-default]",
+    "  bitwarden-agent-secrets init [--credential-store keychain|file] [--profile <name>] [--organization-id <id>] [--set-default] [--access-token-prompt|--access-token-stdin]",
     "  bitwarden-agent-secrets doctor [--profile <name>] [--json] [--skip-secrets]",
     "  bitwarden-agent-secrets exec [--profile <name>] --map <alias:ENV> -- <command...>",
     "  bitwarden-agent-secrets file [--profile <name>] --mount <alias:ENV> -- <command...>",
     "  bitwarden-agent-secrets audit tail",
     "  bitwarden-agent-secrets profile list",
-    "  bitwarden-agent-secrets profile add <name> [--credential-store keychain|file]",
+    "  bitwarden-agent-secrets profile add <name> [--credential-store keychain|file] [--organization-id <id>]",
     "  bitwarden-agent-secrets profile rotate-token <name> [--credential-store keychain|file]",
     "  bitwarden-agent-secrets profile use <name>",
     "  bitwarden-agent-secrets profile remove <name>",
     "  bitwarden-agent-secrets policy list",
     "  bitwarden-agent-secrets policy add <alias> --secret-id <id> --mode <env|file> --env <ENV> --profile <name> [--allowed-command <name>]",
     "  bitwarden-agent-secrets policy remove <alias>",
+    "  bitwarden-agent-secrets policy setup [--profile <name>] [--organization-id <id>] [--interactive|--select <BitwardenName,...>] [--allow <alias:cmd,cmd>] [--dry-run|--apply --yes]",
     "  bitwarden-agent-secrets policy validate",
   ];
 
   await writeStdout(`${lines.join("\n")}\n`);
 }
 
-void main();
+await main();
