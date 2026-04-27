@@ -131,7 +131,7 @@ Supported credential backends:
   "version": 2,
   "secrets": {
     "github_token": {
-      "secretId": "382580ab-1368-4e85-bfa3-b02e01400c9f",
+      "secretId": "bw-secret-id-github-token",
       "mode": "env",
       "envName": "GITHUB_TOKEN",
       "profiles": ["default"],
@@ -139,7 +139,7 @@ Supported credential backends:
       "allowedCommands": ["gh", "git"]
     },
     "prod_ssh_key": {
-      "secretId": "be8e0ad8-d545-4017-a55a-b02f014d4158",
+      "secretId": "bw-secret-id-prod-ssh-key",
       "mode": "file",
       "envName": "SSH_KEY_FILE",
       "profiles": ["prod"],

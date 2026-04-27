@@ -58,7 +58,7 @@ Rules:
   "version": 2,
   "secrets": {
     "github_token": {
-      "secretId": "382580ab-1368-4e85-bfa3-b02e01400c9f",
+      "secretId": "bw-secret-id-github-token",
       "mode": "env",
       "envName": "GITHUB_TOKEN",
       "profiles": ["default"],
