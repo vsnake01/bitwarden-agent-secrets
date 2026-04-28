@@ -5,6 +5,7 @@ import { runDoctor } from "./commands/doctor.js";
 import { runExec } from "./commands/exec.js";
 import { runFile } from "./commands/file.js";
 import { runInit } from "./commands/init.js";
+import { runOnboard } from "./commands/onboard.js";
 import { runPolicyAdd } from "./commands/policy-add.js";
 import { runPolicyList } from "./commands/policy-list.js";
 import { runPolicyRemove } from "./commands/policy-remove.js";
@@ -31,6 +32,10 @@ async function main(): Promise<void> {
     switch (command) {
       case "init":
         await runInit(args.slice(1));
+        return;
+      case "onboard":
+      case "setup":
+        await runOnboard(args.slice(1));
         return;
       case "doctor":
         await runDoctor(args.slice(1));
@@ -118,6 +123,8 @@ async function printHelp(): Promise<void> {
     "bitwarden-agent-secrets",
     "",
     "Usage:",
+    "  bitwarden-agent-secrets onboard [--profile <name>] [--credential-store keychain|file] [--organization-id <id>] [--yes|--dry-run] [--skip-token] [--skip-policy]",
+    "  bitwarden-agent-secrets setup [same flags as onboard]",
     "  bitwarden-agent-secrets init [--credential-store keychain|file] [--profile <name>] [--organization-id <id>] [--set-default] [--access-token-prompt|--access-token-stdin]",
     "  bitwarden-agent-secrets doctor [--profile <name>] [--json] [--skip-secrets]",
     "  bitwarden-agent-secrets exec [--profile <name>] --map <alias:ENV> -- <command...>",
