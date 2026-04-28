@@ -54,7 +54,41 @@ bas --help
 
 ## First-Time Setup
 
-Initialize the default profile:
+For most users, run the guided onboarding wizard:
+
+```bash
+bas onboard
+```
+
+It asks for the Bitwarden Secrets Manager machine account token, stores it in the
+selected credential backend, asks for the Bitwarden organization id when needed,
+lists Bitwarden secret metadata, and opens the policy checkbox UI.
+
+The same wizard can be run again later. It reuses the current profile and policy
+source, then lets you change the selected secrets and allowed commands.
+
+Common options:
+
+```bash
+bas onboard --profile default --credential-store keychain
+bas onboard --dry-run
+bas onboard --skip-token
+bas onboard --skip-policy
+bas setup
+```
+
+For automation, pass the token through stdin and approve the policy plan:
+
+```bash
+printf '%s' "$BWS_ACCESS_TOKEN" | \
+  bas onboard \
+    --organization-id <bitwarden-organization-id> \
+    --access-token-stdin \
+    --yes
+```
+
+Advanced setup can use the lower-level commands directly. Initialize the default
+profile:
 
 ```bash
 bitwarden-agent-secrets init --credential-store keychain --organization-id <bitwarden-organization-id>
@@ -69,16 +103,6 @@ bitwarden-agent-secrets init \
   --credential-store keychain \
   --organization-id <bitwarden-organization-id> \
   --access-token-prompt
-```
-
-For automation, pass the token through stdin:
-
-```bash
-printf '%s' "$BWS_ACCESS_TOKEN" | \
-  bitwarden-agent-secrets init \
-    --credential-store keychain \
-    --organization-id <bitwarden-organization-id> \
-    --access-token-stdin
 ```
 
 Initialize another profile without changing the default:
@@ -135,6 +159,7 @@ Expected permissions:
     "default": {
       "apiUrl": "https://api.bitwarden.com",
       "identityUrl": "https://identity.bitwarden.com",
+      "organizationId": "bitwarden-organization-id",
       "credentialStore": {
         "type": "keychain",
         "service": "bitwarden-agent-secrets",

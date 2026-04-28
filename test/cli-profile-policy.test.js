@@ -10,6 +10,7 @@ import { runDoctor } from "../dist/commands/doctor.js";
 import { runExec } from "../dist/commands/exec.js";
 import { runFile } from "../dist/commands/file.js";
 import { runInit } from "../dist/commands/init.js";
+import { runOnboard } from "../dist/commands/onboard.js";
 import { runPolicyAdd } from "../dist/commands/policy-add.js";
 import { runPolicyList } from "../dist/commands/policy-list.js";
 import { runPolicyRemove } from "../dist/commands/policy-remove.js";
@@ -291,6 +292,184 @@ test(
       );
       assert.equal(updatedConfig.defaultProfile, "prod");
     } finally {
+      await cleanupTempHome(homePath);
+    }
+  },
+);
+
+test(
+  "onboard prompts for token and organization id then configures policy",
+  { concurrency: false },
+  async () => {
+    const homePath = await makeTempHome();
+    const calls = installFakeBitwardenSdk();
+
+    try {
+      setTokenPromptForTests(async (label) => {
+        assert.match(label, /Bitwarden Secrets Manager machine account token/);
+        return "onboard-token";
+      });
+      setLinePromptForTests(async (label) => {
+        assert.match(label, /Bitwarden organization ID/);
+        return "org-onboard";
+      });
+      setPolicySetupTuiForTests(async ({ bitwardenSecrets, existingSource }) => {
+        assert.deepEqual(
+          bitwardenSecrets.map((secret) => secret.name),
+          ["GITHUB_TOKEN", "SENTRY_AUTH_TOKEN", "PROD_SSH_KEY"],
+        );
+        assert.deepEqual(existingSource.secrets, {});
+        return {
+          selectedNames: ["GITHUB_TOKEN"],
+          allowedCommandsByAlias: new Map([["github_token", ["gh", "git"]]]),
+        };
+      });
+
+      const output = await withPatchedEnv(
+        { HOME: homePath, BWS_ACCESS_TOKEN: undefined },
+        () =>
+          captureStdout(() =>
+            runOnboard(["--credential-store", "file", "--yes"]),
+          ),
+      );
+
+      assert.match(output, /Onboarding profile default/);
+      assert.match(output, /Initialized profile default using credential store file/);
+      assert.match(output, /Policy setup for profile: default/);
+      assert.match(output, /ADD github_token/);
+      assert.match(output, /Policy updated/);
+
+      const config = await readJson(
+        pathInHome(homePath, ".config", "bitwarden-agent-secrets", "config.json"),
+      );
+      assert.equal(config.defaultProfile, "default");
+      assert.equal(config.profiles.default.organizationId, "org-onboard");
+      assert.equal(config.profiles.default.credentialStore.type, "file");
+
+      const credentialContents = await readFile(
+        pathInHome(
+          homePath,
+          ".config",
+          "bitwarden-agent-secrets",
+          "credentials",
+          "default.token",
+        ),
+        "utf8",
+      );
+      assert.equal(credentialContents.trim(), "onboard-token");
+
+      const policy = await readJson(
+        pathInHome(homePath, ".config", "bitwarden-agent-secrets", "policy.json"),
+      );
+      assert.deepEqual(policy.secrets.github_token, {
+        secretId: "secret-github",
+        mode: "env",
+        envName: "GITHUB_TOKEN",
+        profiles: ["default"],
+        requiresApproval: false,
+        allowedCommands: ["gh", "git"],
+      });
+      assert.deepEqual(calls.lists, ["org-onboard"]);
+      assert.deepEqual(calls.gets, []);
+    } finally {
+      resetTokenPromptForTests();
+      resetLinePromptForTests();
+      resetPolicySetupTuiForTests();
+      resetBitwardenSdkLoaderForTests();
+      await cleanupTempHome(homePath);
+    }
+  },
+);
+
+test(
+  "onboard can rerun with existing profile and policy source without replacing token",
+  { concurrency: false },
+  async () => {
+    const homePath = await makeTempHome();
+    const calls = installFakeBitwardenSdk();
+
+    try {
+      await withPatchedEnv(
+        { HOME: homePath, BWS_ACCESS_TOKEN: "token-1" },
+        () =>
+          runInit([
+            "--credential-store",
+            "file",
+            "--profile",
+            "default",
+            "--organization-id",
+            "org-123",
+          ]),
+      );
+      await withPatchedEnv({ HOME: homePath }, () =>
+        runPolicySetup([
+          "--profile",
+          "default",
+          "--select",
+          "GITHUB_TOKEN",
+          "--allow",
+          "github_token:gh",
+          "--apply",
+          "--yes",
+        ]),
+      );
+
+      setTokenPromptForTests(async () => {
+        throw new Error("token prompt should not run");
+      });
+      setLinePromptForTests(async () => {
+        throw new Error("organization prompt should not run");
+      });
+      setPolicySetupTuiForTests(async ({ existingSource }) => {
+        assert.deepEqual(existingSource.secrets.github_token.allowedCommands, ["gh"]);
+        return {
+          selectedNames: ["SENTRY_AUTH_TOKEN"],
+          allowedCommandsByAlias: new Map([["sentry_auth_token", ["sentry-cli"]]]),
+        };
+      });
+
+      const output = await withPatchedEnv(
+        { HOME: homePath, BWS_ACCESS_TOKEN: undefined },
+        () =>
+          captureStdout(() =>
+            runOnboard(["--profile", "default", "--skip-token", "--yes"]),
+          ),
+      );
+
+      assert.match(output, /Using existing profile default/);
+      assert.match(output, /REMOVE github_token/);
+      assert.match(output, /ADD sentry_auth_token/);
+
+      const credentialContents = await readFile(
+        pathInHome(
+          homePath,
+          ".config",
+          "bitwarden-agent-secrets",
+          "credentials",
+          "default.token",
+        ),
+        "utf8",
+      );
+      assert.equal(credentialContents.trim(), "token-1");
+
+      const policy = await readJson(
+        pathInHome(homePath, ".config", "bitwarden-agent-secrets", "policy.json"),
+      );
+      assert.equal(policy.secrets.github_token, undefined);
+      assert.deepEqual(policy.secrets.sentry_auth_token, {
+        secretId: "secret-sentry",
+        mode: "env",
+        envName: "SENTRY_AUTH_TOKEN",
+        profiles: ["default"],
+        requiresApproval: false,
+        allowedCommands: ["sentry-cli"],
+      });
+      assert.deepEqual(calls.gets, []);
+    } finally {
+      resetTokenPromptForTests();
+      resetLinePromptForTests();
+      resetPolicySetupTuiForTests();
+      resetBitwardenSdkLoaderForTests();
       await cleanupTempHome(homePath);
     }
   },

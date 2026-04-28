@@ -109,6 +109,45 @@ Expected permissions:
 
 ## CLI Contract
 
+### `onboard`
+
+Purpose:
+
+- guide a normal user through first-time setup with one command
+- store the Bitwarden Secrets Manager token through `init` behavior
+- collect or reuse the Bitwarden organization id
+- run interactive policy setup in the same flow
+- remain safe to run repeatedly by loading existing profile and policy source state
+
+Aliases:
+
+- `setup`
+
+Form:
+
+```bash
+bitwarden-agent-secrets onboard \
+  [--profile <name>] \
+  [--credential-store <keychain|file>] \
+  [--organization-id <id>] \
+  [--access-token-stdin|--access-token-prompt] \
+  [--yes|--dry-run] \
+  [--skip-token] \
+  [--skip-policy]
+```
+
+Behavior:
+
+- defaults to the current default profile, or `default` if no config exists
+- prompts for the access token without echoing when creating a profile and no token is provided through stdin or `BWS_ACCESS_TOKEN`
+- reuses the existing profile token on repeated runs unless replacement is requested or a token is explicitly provided
+- prompts for `organizationId` if neither the flag nor the profile defines one and policy setup will run
+- invokes policy setup in interactive mode
+- `--yes` applies the rendered policy plan without the final confirmation prompt
+- `--dry-run` previews the policy plan without writing policy files
+- `--skip-token` leaves token storage untouched and requires the profile to already exist
+- `--skip-policy` only initializes or updates the profile/token state
+
 ### `init`
 
 Purpose:
